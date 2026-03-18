@@ -48,6 +48,19 @@ export interface MarketIntel {
   }>;
 }
 
+export interface ClaudeIntel {
+  bestPrice: number | null;
+  bestSource: string | null;
+  sourceUrl: string | null;
+  insight: string;
+  alternatives: Array<{
+    distributor: string;
+    price: number;
+    url: string;
+    note?: string;
+  }>;
+}
+
 export interface PricedItem {
   partNumber: string;
   description: string;
@@ -70,6 +83,7 @@ export interface PricedItem {
     };
   };
   marketIntel?: MarketIntel;
+  claudeIntel?: ClaudeIntel;
 }
 
 export interface PricingResponse {

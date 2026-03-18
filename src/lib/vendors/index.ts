@@ -15,6 +15,7 @@ import { DigiKeyClient } from './digikey';
 import { MouserClient } from './mouser';
 import { GraingerClient } from './grainger';
 import { searchMarketPrices } from './market-intel';
+import { claudeAnalyzeParts } from './claude-intel';
 import type { VendorClient, PricingRequest, PricingResponse, PricedItem } from './types';
 
 // Singleton clients
@@ -72,10 +73,10 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
   const configuredVendors = clients.filter(c => c.isConfigured()).map(c => c.name);
   const hasLiveVendors = clients.some(c => c.name !== 'Grainger' && c.isConfigured());
 
-  // Run market intelligence search in parallel with vendor queries
-  const marketIntelPromise: Promise<Map<string, unknown>> = searchMarketPrices(
-    request.items.map(i => i.partNumber)
-  ) as Promise<Map<string, unknown>>;
+  // Run market intel + Claude analysis in parallel with vendor queries
+  const partNumbers = request.items.map(i => i.partNumber);
+  const marketIntelPromise: Promise<Map<string, unknown>> = searchMarketPrices(partNumbers) as Promise<Map<string, unknown>>;
+  const claudeIntelPromise: Promise<Map<string, unknown>> = claudeAnalyzeParts(partNumbers) as Promise<Map<string, unknown>>;
 
   const pricedItems: PricedItem[] = await Promise.all(
     request.items.map(async (item) => {
@@ -184,6 +185,40 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
     }
   } catch (err) {
     console.error('[Pricing] Market intel merge failed (non-fatal):', err);
+  }
+
+  // Merge Claude AI analysis
+  try {
+    const claudeResults = await claudeIntelPromise;
+    for (const item of pricedItems) {
+      const claude = claudeResults.get(item.partNumber);
+      if (claude && (claude as { searched?: boolean }).searched) {
+        const claudeData = claude as { bestPrice: number | null; bestSource: string | null; sourceUrl: string | null; insight: string; alternatives: Array<{ distributor: string; price: number; url: string; note?: string }> };
+        item.claudeIntel = {
+          bestPrice: claudeData.bestPrice,
+          bestSource: claudeData.bestSource,
+          sourceUrl: claudeData.sourceUrl,
+          insight: claudeData.insight,
+          alternatives: claudeData.alternatives,
+        };
+
+        // If Claude found a better price, update best vendor
+        if (claudeData.bestPrice !== null && (item.bestPrice === null || claudeData.bestPrice < item.bestPrice)) {
+          const highestPrice = Math.max(
+            item.vendors.mcmaster || 0, item.vendors.grainger || 0,
+            item.vendors.digikey || 0, item.vendors.mouser || 0,
+            item.bestPrice || 0
+          );
+          if (highestPrice > 0) {
+            item.savings = parseFloat(((highestPrice - claudeData.bestPrice) * item.qty).toFixed(2));
+          }
+          item.bestVendor = claudeData.bestSource || item.bestVendor;
+          item.bestPrice = claudeData.bestPrice;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Pricing] Claude intel merge failed (non-fatal):', err);
   }
 
   const totalSavings = parseFloat(

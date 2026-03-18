@@ -21,6 +21,14 @@ interface MarketIntel {
   allFindings: Array<{ distributor: string; price: number; url: string }>;
 }
 
+interface ClaudeIntel {
+  bestPrice: number | null;
+  bestSource: string | null;
+  sourceUrl: string | null;
+  insight: string;
+  alternatives: Array<{ distributor: string; price: number; url: string; note?: string }>;
+}
+
 interface BomItem {
   partNumber: string;
   description: string;
@@ -33,6 +41,7 @@ interface BomItem {
   savings: number;
   details?: { [vendor: string]: VendorDetail };
   marketIntel?: MarketIntel;
+  claudeIntel?: ClaudeIntel;
 }
 
 interface Bom {
@@ -153,7 +162,7 @@ export default function Dashboard() {
       const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
       setManualBomCounter(prev => prev + 1);
 
-      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail }; marketIntel?: MarketIntel }) => ({
+      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail }; marketIntel?: MarketIntel; claudeIntel?: ClaudeIntel }) => ({
         partNumber: item.partNumber,
         description: item.description || `Part ${item.partNumber}`,
         qty: item.qty,
@@ -165,6 +174,7 @@ export default function Dashboard() {
         savings: item.savings,
         details: item.details,
         marketIntel: item.marketIntel,
+        claudeIntel: item.claudeIntel,
       }));
 
       const totalSavings = analyzedItems.reduce((sum, i) => sum + i.savings, 0);
@@ -517,6 +527,30 @@ export default function Dashboard() {
                                       ))}
                                     </div>
                                   )}
+                                  {item.claudeIntel && (item.claudeIntel.bestPrice !== null || item.claudeIntel.insight) && (
+                                    <div className="mt-1.5 space-y-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[9px] text-purple-400/70">🤖</span>
+                                        {item.claudeIntel.bestPrice !== null && item.claudeIntel.sourceUrl ? (
+                                          <a href={item.claudeIntel.sourceUrl} target="_blank" rel="noopener" className="text-[9px] font-mono text-purple-400/60 hover:text-purple-400 transition-colors">
+                                            {item.claudeIntel.bestSource} ${item.claudeIntel.bestPrice.toFixed(2)}
+                                          </a>
+                                        ) : item.claudeIntel.bestPrice !== null ? (
+                                          <span className="text-[9px] font-mono text-purple-400/60">
+                                            {item.claudeIntel.bestSource} ${item.claudeIntel.bestPrice.toFixed(2)}
+                                          </span>
+                                        ) : null}
+                                        {item.claudeIntel.alternatives.slice(0, 2).map((alt, ai) => (
+                                          <a key={ai} href={alt.url} target="_blank" rel="noopener" className="text-[9px] font-mono text-purple-400/40 hover:text-purple-400 transition-colors">
+                                            · {alt.distributor} ${alt.price.toFixed(2)}
+                                          </a>
+                                        ))}
+                                      </div>
+                                      {item.claudeIntel.insight && (
+                                        <p className="text-[9px] text-purple-300/40 italic leading-tight pl-4">{item.claudeIntel.insight}</p>
+                                      )}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="px-3 py-3 text-center text-xs text-white/40 font-mono">{item.qty}</td>
                                 <PriceCell val={item.mcmaster} />
@@ -552,7 +586,7 @@ export default function Dashboard() {
                         </div>
                         <div>
                           <p className="text-[10px] font-mono text-blue-400/70 uppercase tracking-wider mb-1">
-                            Vendor Price Analysis
+                            {bom.items.some(i => i.claudeIntel && i.claudeIntel.bestPrice !== null) ? 'AI-Powered Price Analysis' : 'Vendor Price Analysis'}
                           </p>
                           <p className="text-xs text-white/50 leading-relaxed">
                             {bom.items.length} parts analyzed across {new Set(bom.items.filter(i => i.mcmaster !== null).length > 0 ? ['McMaster'] : []).size + new Set(bom.items.filter(i => i.grainger !== null).length > 0 ? ['Grainger'] : []).size + (bom.items.some(i => i.digikey !== null) ? 1 : 0) + (bom.items.some(i => i.mouser !== null) ? 1 : 0)} vendors. {bom.items.filter(i => i.bestVendor === 'Grainger').length > 0 ? `${bom.items.filter(i => i.bestVendor === 'Grainger').length} parts cheapest on Grainger. ` : ''}{bom.items.filter(i => i.bestVendor === 'DigiKey').length > 0 ? `${bom.items.filter(i => i.bestVendor === 'DigiKey').length} parts cheapest on DigiKey. ` : ''}
