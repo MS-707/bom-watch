@@ -552,7 +552,7 @@ export default function Dashboard() {
                         </div>
                         <div>
                           <p className="text-[10px] font-mono text-blue-400/70 uppercase tracking-wider mb-1">
-                            {bom.status === 'manual' ? 'Vendor Price Analysis' : 'Claude AI Analysis'}
+                            Vendor Price Analysis
                           </p>
                           <p className="text-xs text-white/50 leading-relaxed">
                             {bom.items.length} parts analyzed across {new Set(bom.items.filter(i => i.mcmaster !== null).length > 0 ? ['McMaster'] : []).size + new Set(bom.items.filter(i => i.grainger !== null).length > 0 ? ['Grainger'] : []).size + (bom.items.some(i => i.digikey !== null) ? 1 : 0) + (bom.items.some(i => i.mouser !== null) ? 1 : 0)} vendors. {bom.items.filter(i => i.bestVendor === 'Grainger').length > 0 ? `${bom.items.filter(i => i.bestVendor === 'Grainger').length} parts cheapest on Grainger. ` : ''}{bom.items.filter(i => i.bestVendor === 'DigiKey').length > 0 ? `${bom.items.filter(i => i.bestVendor === 'DigiKey').length} parts cheapest on DigiKey. ` : ''}

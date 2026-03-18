@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { priceParts } from '@/lib/vendors';
 import type { PricingRequest } from '@/lib/vendors';
 
+// Allow up to 30 seconds for vendor API + market intel queries
+export const maxDuration = 30;
+
 /**
  * POST /api/pricing
  * 

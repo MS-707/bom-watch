@@ -72,11 +72,10 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
   const configuredVendors = clients.filter(c => c.isConfigured()).map(c => c.name);
   const hasLiveVendors = clients.some(c => c.name !== 'Grainger' && c.isConfigured());
 
-  // Run market intelligence search in parallel with vendor queries (non-blocking, 8s timeout)
-  const marketIntelPromise: Promise<Map<string, unknown>> = Promise.race([
-    searchMarketPrices(request.items.map(i => i.partNumber)) as Promise<Map<string, unknown>>,
-    new Promise<Map<string, unknown>>((resolve) => setTimeout(() => resolve(new Map()), 8000)),
-  ]);
+  // Run market intelligence search in parallel with vendor queries
+  const marketIntelPromise: Promise<Map<string, unknown>> = searchMarketPrices(
+    request.items.map(i => i.partNumber)
+  ) as Promise<Map<string, unknown>>;
 
   const pricedItems: PricedItem[] = await Promise.all(
     request.items.map(async (item) => {
