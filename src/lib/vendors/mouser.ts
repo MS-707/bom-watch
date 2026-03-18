@@ -74,8 +74,13 @@ export class MouserClient implements VendorClient {
       const parts: MouserPart[] = data.SearchResults?.Parts || [];
       if (parts.length === 0) return null;
 
-      // Pick closest match
-      const part = parts[0];
+      // Prefer exact match on ManufacturerPartNumber, then MouserPartNumber, then first result
+      const normalizedQuery = partNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const part = parts.find(p => 
+        p.ManufacturerPartNumber?.toUpperCase().replace(/[^A-Z0-9]/g, '') === normalizedQuery
+      ) || parts.find(p =>
+        p.MouserPartNumber?.toUpperCase().replace(/[^A-Z0-9]/g, '') === normalizedQuery
+      ) || parts[0];
 
       // Parse price for requested quantity
       let unitPrice = 0;

@@ -7,6 +7,13 @@ import { ManualBomDrawer } from './manual-bom';
 import { DataToggle, type DataSource } from './data-toggle';
 
 // --- Types ---
+interface VendorDetail {
+  inStock: boolean;
+  stockQty: number | null;
+  url: string;
+  leadTimeDays: number | null;
+}
+
 interface BomItem {
   partNumber: string;
   description: string;
@@ -17,6 +24,7 @@ interface BomItem {
   mouser: number | null;
   bestVendor: string;
   savings: number;
+  details?: { [vendor: string]: VendorDetail };
 }
 
 interface Bom {
@@ -132,7 +140,7 @@ export default function Dashboard() {
       const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
       setManualBomCounter(prev => prev + 1);
 
-      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number }) => ({
+      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail } }) => ({
         partNumber: item.partNumber,
         description: item.description || `Part ${item.partNumber}`,
         qty: item.qty,
@@ -142,6 +150,7 @@ export default function Dashboard() {
         mouser: item.vendors.mouser,
         bestVendor: item.bestVendor,
         savings: item.savings,
+        details: item.details,
       }));
 
       const totalSavings = analyzedItems.reduce((sum, i) => sum + i.savings, 0);
@@ -466,11 +475,23 @@ export default function Dashboard() {
                                 {val ? `$${val.toFixed(2)}` : '—'}
                               </td>
                             );
+                            const vendorLinks = item.details ? Object.entries(item.details).filter(([, d]) => d.url) : [];
                             return (
                               <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors duration-150">
                                 <td className="px-5 py-3">
                                   <p className="font-mono text-[11px] text-white/30">{item.partNumber}</p>
                                   <p className="text-xs text-white/60 truncate max-w-[280px]">{item.description}</p>
+                                  {vendorLinks.length > 0 && (
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      {vendorLinks.map(([vendor, detail]) => (
+                                        <a key={vendor} href={detail.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors">
+                                          <ExternalLink className="w-2.5 h-2.5" />
+                                          {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
+                                          {detail.stockQty !== null && <span className="text-white/20">({detail.stockQty.toLocaleString()} in stock)</span>}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="px-3 py-3 text-center text-xs text-white/40 font-mono">{item.qty}</td>
                                 <PriceCell val={item.mcmaster} />
