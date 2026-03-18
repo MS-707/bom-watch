@@ -92,8 +92,8 @@ export function ManualBomDrawer({ isOpen, onClose, onSubmit, isAnalyzing }: Manu
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" onClick={onClose} />
       
       {/* Drawer */}
-      <div className="fixed inset-x-0 bottom-0 z-50 animate-in">
-        <div className="max-w-3xl mx-auto bg-[#111] border border-white/10 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-in">
+        <div className="w-full max-w-3xl bg-[#111] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[85vh] flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
             <div>
