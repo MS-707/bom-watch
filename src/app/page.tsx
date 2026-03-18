@@ -109,6 +109,7 @@ export default function Dashboard() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>('demo');
   const [manualBomCounter, setManualBomCounter] = useState(0);
+  const [expandedPart, setExpandedPart] = useState<string | null>(null);
 
   // Fetch from API — falls back to mock data if API returns mock flag
   const fetchBoms = useCallback(async () => {
@@ -503,57 +504,84 @@ export default function Dashboard() {
                               </td>
                             );
                             const vendorLinks = item.details ? Object.entries(item.details).filter(([, d]) => d.url) : [];
+                            const partKey = `${bom.id}-${item.partNumber}`;
+                            const isPartExpanded = expandedPart === partKey;
+                            const allSources = item.claudeIntel ? [
+                              ...(item.claudeIntel.bestPrice !== null ? [{ distributor: item.claudeIntel.bestSource || 'Unknown', price: item.claudeIntel.bestPrice, url: item.claudeIntel.sourceUrl || '', note: 'Best price' }] : []),
+                              ...item.claudeIntel.alternatives,
+                            ] : [];
+                            const vendorCount = allSources.length + vendorLinks.length;
                             return (
                               <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors duration-150">
                                 <td className="px-5 py-3">
-                                  <p className="font-mono text-[11px] text-white/30">{item.partNumber}</p>
-                                  <p className="text-xs text-white/60 truncate max-w-[280px]">{item.description}</p>
-                                  {vendorLinks.length > 0 && (
-                                    <div className="flex items-center gap-2 mt-1.5">
-                                      {vendorLinks.map(([vendor, detail]) => (
-                                        <a key={vendor} href={detail.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors">
-                                          <ExternalLink className="w-2.5 h-2.5" />
-                                          {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
-                                          {detail.stockQty !== null && <span className="text-white/20">({detail.stockQty.toLocaleString()} in stock)</span>}
-                                        </a>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {item.marketIntel && item.marketIntel.allFindings.length > 0 && (
-                                    <div className="mt-1.5 flex items-center gap-1.5">
-                                      <span className="text-[9px] text-amber-400/70">💡</span>
-                                      {item.marketIntel.allFindings.slice(0, 3).map((finding, fi) => (
-                                        <a key={fi} href={finding.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-amber-400/50 hover:text-amber-400 transition-colors">
-                                          {finding.distributor} ${finding.price.toFixed(2)}
-                                          {fi < Math.min(2, item.marketIntel!.allFindings.length - 1) && <span className="text-white/10">·</span>}
-                                        </a>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {item.claudeIntel && (item.claudeIntel.bestPrice !== null || item.claudeIntel.insight) && (
-                                    <div className="mt-1.5 space-y-1">
-                                      <div className="flex items-center gap-1.5">
-                                        <Sparkles className="w-2.5 h-2.5 text-purple-400/70" />
-                                        {item.claudeIntel.bestPrice !== null && item.claudeIntel.sourceUrl ? (
-                                          <a href={item.claudeIntel.sourceUrl} target="_blank" rel="noopener" className="text-[9px] font-mono text-purple-400/60 hover:text-purple-400 transition-colors">
-                                            {item.claudeIntel.bestSource} ${item.claudeIntel.bestPrice.toFixed(2)}
-                                          </a>
-                                        ) : item.claudeIntel.bestPrice !== null ? (
-                                          <span className="text-[9px] font-mono text-purple-400/60">
-                                            {item.claudeIntel.bestSource} ${item.claudeIntel.bestPrice.toFixed(2)}
-                                          </span>
-                                        ) : null}
-                                        {item.claudeIntel.alternatives.slice(0, 2).map((alt, ai) => (
-                                          <a key={ai} href={alt.url} target="_blank" rel="noopener" className="text-[9px] font-mono text-purple-400/40 hover:text-purple-400 transition-colors">
-                                            · {alt.distributor} ${alt.price.toFixed(2)}
-                                          </a>
-                                        ))}
-                                      </div>
-                                      {item.claudeIntel.insight && (
-                                        <p className="text-[9px] text-purple-300/40 italic leading-tight pl-4">{item.claudeIntel.insight}</p>
+                                  <div className="flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-mono text-[11px] text-white/30">{item.partNumber}</p>
+                                      <p className="text-xs text-white/60 truncate max-w-[280px]">{item.description}</p>
+                                      {vendorLinks.length > 0 && (
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                          {vendorLinks.map(([vendor, detail]) => (
+                                            <a key={vendor} href={detail.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors">
+                                              <ExternalLink className="w-2.5 h-2.5" />
+                                              {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
+                                              {detail.stockQty !== null && <span className="text-white/20">({detail.stockQty.toLocaleString()} in stock)</span>}
+                                            </a>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {item.marketIntel && item.marketIntel.allFindings.length > 0 && (
+                                        <div className="mt-1.5 flex items-center gap-1.5">
+                                          <span className="text-[9px] text-amber-400/70">&#x1F4A1;</span>
+                                          {item.marketIntel.allFindings.slice(0, 3).map((finding, fi) => (
+                                            <a key={fi} href={finding.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-amber-400/50 hover:text-amber-400 transition-colors">
+                                              {finding.distributor} ${finding.price.toFixed(2)}
+                                              {fi < Math.min(2, item.marketIntel!.allFindings.length - 1) && <span className="text-white/10">·</span>}
+                                            </a>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {/* Expandable AI Intelligence Panel */}
+                                      {(allSources.length > 0 || item.claudeIntel?.insight) && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setExpandedPart(isPartExpanded ? null : partKey); }}
+                                          className="mt-2 flex items-center gap-1.5 text-[9px] font-mono text-purple-400/50 hover:text-purple-400 transition-colors cursor-pointer"
+                                        >
+                                          <Sparkles className="w-2.5 h-2.5" />
+                                          <span>{vendorCount} vendor{vendorCount !== 1 ? 's' : ''} searched</span>
+                                          <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isPartExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                      )}
+                                      {isPartExpanded && item.claudeIntel && (
+                                        <div className="mt-2 ml-1 p-3 bg-purple-500/[0.04] border border-purple-500/10 rounded-lg space-y-2 animate-in">
+                                          <p className="text-[10px] font-mono text-purple-400/60 uppercase tracking-wider">AI Price Intelligence</p>
+                                          {allSources.map((src, si) => (
+                                            <div key={si} className="flex items-center justify-between gap-3">
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${si === 0 ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                                                {src.url ? (
+                                                  <a href={src.url} target="_blank" rel="noopener" className="text-[11px] font-mono text-purple-300/80 hover:text-purple-300 transition-colors truncate">
+                                                    {src.distributor}
+                                                    <ExternalLink className="w-2.5 h-2.5 inline ml-1 opacity-40" />
+                                                  </a>
+                                                ) : (
+                                                  <span className="text-[11px] font-mono text-purple-300/60">{src.distributor}</span>
+                                                )}
+                                                {src.note && <span className="text-[9px] text-white/20">{src.note}</span>}
+                                              </div>
+                                              <span className={`text-[11px] font-mono flex-shrink-0 ${si === 0 ? 'text-emerald-400 font-medium' : 'text-white/40'}`}>
+                                                ${src.price.toFixed(2)}
+                                              </span>
+                                            </div>
+                                          ))}
+                                          {item.claudeIntel.insight && (
+                                            <p className="text-[10px] text-purple-300/40 italic leading-relaxed pt-1 border-t border-purple-500/10">
+                                              {item.claudeIntel.insight}
+                                            </p>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  )}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-3 text-center text-xs text-white/40 font-mono">{item.qty}</td>
                                 <PriceCell val={item.mcmaster} />
