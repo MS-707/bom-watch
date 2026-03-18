@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, ChevronUp, Bell, BarChart3, Zap, Search, Filter, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, ChevronUp, Bell, BarChart3, Zap, Search, Filter, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Wifi, WifiOff, Plus } from 'lucide-react';
 import { SavingsChart, VendorChart } from './charts';
+import { ManualBomDrawer } from './manual-bom';
+import { DataToggle, type DataSource } from './data-toggle';
 
 // --- Types ---
 interface BomItem {
@@ -77,6 +79,10 @@ export default function Dashboard() {
   const [isLive, setIsLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [manualBomOpen, setManualBomOpen] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [dataSource, setDataSource] = useState<DataSource>('demo');
+  const [manualBomCounter, setManualBomCounter] = useState(0);
 
   // Fetch from API — falls back to mock data if API returns mock flag
   const fetchBoms = useCallback(async () => {
@@ -105,6 +111,57 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Handle manual BOM submission
+  const handleManualBom = useCallback((submission: { name: string; engineer: string; items: { partNumber: string; description: string; qty: number }[] }) => {
+    setIsAnalyzing(true);
+    
+    // Simulate analysis delay (in production, this calls Claude API + vendor pricing)
+    setTimeout(() => {
+      const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
+      setManualBomCounter(prev => prev + 1);
+      
+      // Generate mock price comparison (in production: real vendor API calls)
+      const analyzedItems = submission.items.map(item => {
+        const basePrice = 5 + Math.random() * 30;
+        const graingerDiscount = 0.15 + Math.random() * 0.15; // 15-30% cheaper
+        const graingerPrice = parseFloat((basePrice * (1 - graingerDiscount)).toFixed(2));
+        const mcmasterPrice = parseFloat(basePrice.toFixed(2));
+        const savings = parseFloat(((mcmasterPrice - graingerPrice) * item.qty).toFixed(2));
+        const isElectronic = item.partNumber.startsWith('DK') || item.partNumber.startsWith('MOU');
+        
+        return {
+          partNumber: item.partNumber,
+          description: item.description || `Part ${item.partNumber}`,
+          qty: item.qty,
+          mcmaster: isElectronic ? null : mcmasterPrice,
+          grainger: isElectronic ? null : graingerPrice,
+          digikey: isElectronic ? parseFloat((Math.random() * 2).toFixed(2)) : null,
+          mouser: isElectronic ? parseFloat((Math.random() * 2).toFixed(2)) : null,
+          bestVendor: isElectronic ? 'DigiKey' : 'Grainger',
+          savings: isElectronic ? parseFloat((Math.random() * 5).toFixed(2)) : savings,
+        };
+      });
+
+      const totalSavings = analyzedItems.reduce((sum, i) => sum + i.savings, 0);
+
+      const newBom: Bom = {
+        id: newId,
+        name: submission.name,
+        engineer: submission.engineer,
+        approvedAt: 'Just now',
+        status: 'manual',
+        newParts: analyzedItems.length,
+        totalSavings: parseFloat(totalSavings.toFixed(2)),
+        items: analyzedItems,
+      };
+
+      setBoms(prev => [newBom, ...prev]);
+      setExpandedBom(newId);
+      setIsAnalyzing(false);
+      setManualBomOpen(false);
+    }, 2000);
+  }, [manualBomCounter]);
+
   // Initial fetch + auto-refresh every 60s
   useEffect(() => {
     setIsLoading(true);
@@ -128,6 +185,7 @@ export default function Dashboard() {
     all: boms.length,
     analyzed: boms.filter(b => b.status === 'analyzed').length,
     ordered: boms.filter(b => b.status === 'ordered').length,
+    manual: boms.filter(b => b.status === 'manual').length,
   }), [boms]);
 
   // Export BOM data as CSV file download
@@ -183,6 +241,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
+              <DataToggle source={dataSource} onSourceChange={setDataSource} isLive={isLive} />
               <button 
                 onClick={fetchBoms} 
                 disabled={refreshing}
@@ -276,6 +335,12 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-medium text-white/80">Recent BOM Changes</h2>
               <span className="text-[10px] font-mono text-white/20 bg-white/[0.04] px-2 py-0.5 rounded-full">{boms.length} total</span>
+              <button
+                onClick={() => setManualBomOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-mono text-emerald-400/70 hover:text-emerald-400 bg-emerald-500/[0.06] hover:bg-emerald-500/10 border border-emerald-500/15 hover:border-emerald-500/25 transition-all"
+              >
+                <Plus className="w-3 h-3" /> New BOM
+              </button>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <div className="relative">
@@ -289,7 +354,7 @@ export default function Dashboard() {
                 />
               </div>
               <div className="flex gap-1">
-                {(['all', 'analyzed', 'ordered'] as const).map(s => (
+                {(['all', 'analyzed', 'ordered', 'manual'] as const).map(s => (
                   <button key={s} onClick={() => setStatusFilter(s)} className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 text-[10px] font-mono rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 ${statusFilter === s ? 'bg-white/10 text-white border border-white/20' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03] border border-transparent'}`}>
                     {s === 'all' ? 'ALL' : s.toUpperCase()}
                     <span className={`text-[9px] px-1.5 py-px rounded-full ${statusFilter === s ? 'bg-white/15 text-white/70' : 'bg-white/[0.05] text-white/20'}`}>
@@ -318,7 +383,7 @@ export default function Dashboard() {
                       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span className="text-[11px] font-mono text-white/30">{bom.id}</span>
                         <h3 className="font-medium text-white text-sm truncate">{bom.name}</h3>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium whitespace-nowrap ${bom.status === 'analyzed' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium whitespace-nowrap ${bom.status === 'analyzed' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : bom.status === 'manual' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
                           {bom.status.toUpperCase()}
                         </span>
                       </div>
@@ -506,6 +571,14 @@ export default function Dashboard() {
           <p className="text-[10px] sm:text-[11px] text-white/20">Powered by Arena PLM + Claude AI + Vercel</p>
         </div>
       </footer>
+
+      {/* Manual BOM Entry Drawer */}
+      <ManualBomDrawer
+        isOpen={manualBomOpen}
+        onClose={() => setManualBomOpen(false)}
+        onSubmit={handleManualBom}
+        isAnalyzing={isAnalyzing}
+      />
     </div>
   );
 }
