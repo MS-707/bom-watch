@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, ChevronUp, Bell, BarChart3, Zap, Search, Filter } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, Legend } from 'recharts';
+import { SavingsChart, VendorChart } from './charts';
 
 // --- Mock Data ---
 const recentBOMs = [
@@ -32,40 +32,9 @@ const recentBOMs = [
   },
 ];
 
-// Chart data
-const monthlySavings = [
-  { month: 'Oct', savings: 890, boms: 6 },
-  { month: 'Nov', savings: 1240, boms: 9 },
-  { month: 'Dec', savings: 1680, boms: 11 },
-  { month: 'Jan', savings: 2100, boms: 12 },
-  { month: 'Feb', savings: 2340, boms: 13 },
-  { month: 'Mar', savings: 2847, boms: 14 },
-];
 
-const vendorSpend = [
-  { name: 'McMaster-Carr', value: 68, color: '#f97316' },
-  { name: 'Grainger', value: 22, color: '#10b981' },
-  { name: 'DigiKey', value: 7, color: '#3b82f6' },
-  { name: 'Mouser', value: 3, color: '#a855f7' },
-];
 
 const stats = { totalSavingsMonth: 2847.30, bomsAnalyzed: 14, avgSavingsPerBom: 203.38, avgTimeToNotify: '< 30s' };
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 shadow-xl">
-        <p className="text-xs text-white/60 font-mono">{label}</p>
-        {payload.map((p: any, i: number) => (
-          <p key={i} className="text-sm font-medium" style={{ color: p.color }}>
-            {p.name === 'savings' ? `$${p.value.toLocaleString()}` : p.value} {p.name === 'boms' ? 'BOMs' : ''}
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
-};
 
 export default function Dashboard() {
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -131,61 +100,8 @@ export default function Dashboard() {
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-          {/* Savings Trend */}
-          <div className="md:col-span-2 bg-white/[0.03] rounded-xl border border-white/[0.06] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-medium text-white/80">Savings Trend</h3>
-                <p className="text-[11px] text-white/30 mt-0.5">Monthly procurement savings over time</p>
-              </div>
-              <span className="text-[10px] font-mono text-emerald-400/60 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">+18% MoM</span>
-            </div>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={monthlySavings}>
-                <defs>
-                  <linearGradient id="savingsGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 11, fontFamily: 'monospace' }} axisLine={{ stroke: 'rgba(255,255,255,0.06)' }} tickLine={false} />
-                <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 11, fontFamily: 'monospace' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="savings" stroke="#10b981" strokeWidth={2} fill="url(#savingsGrad)" animationDuration={1500} animationEasing="ease-out" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Vendor Spend Distribution */}
-          <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-5">
-            <div className="mb-4">
-              <h3 className="text-sm font-medium text-white/80">Vendor Distribution</h3>
-              <p className="text-[11px] text-white/30 mt-0.5">Current spend by vendor</p>
-            </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <PieChart>
-                <Pie data={vendorSpend} cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={3} dataKey="value" animationDuration={1200} animationEasing="ease-out">
-                  {vendorSpend.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => `${value}%`} contentStyle={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px', color: 'white' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-1.5 mt-2">
-              {vendorSpend.map((v, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: v.color }}></span>
-                  <span className="text-[10px] text-white/40 truncate">{v.name}</span>
-                  <span className="text-[10px] font-mono text-white/60 ml-auto">{v.value}%</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 pt-3 border-t border-white/[0.06]">
-              <p className="text-[10px] text-amber-400/70">⚠ 68% McMaster → shift fasteners to Grainger for ~$4.2K/qtr savings</p>
-            </div>
-          </div>
+          <SavingsChart />
+          <VendorChart />
         </div>
 
         {/* Alert Banner */}
