@@ -36,13 +36,13 @@ export async function claudeAnalyzePart(partNumber: string): Promise<ClaudeIntel
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2024-01-01',
+        'anthropic-version': '2025-03-01',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
+        max_tokens: 1024,
         tools: [{
-          type: 'web_search',
+          type: 'web_search_20250305',
           name: 'web_search',
         }],
         messages: [{

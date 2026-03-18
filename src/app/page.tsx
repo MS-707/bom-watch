@@ -232,7 +232,7 @@ export default function Dashboard() {
 
   // Export BOM data as CSV file download
   const exportBomCSV = useCallback((bom: Bom) => {
-    const headers = ['Part Number', 'Description', 'Qty', 'McMaster', 'Grainger', 'DigiKey', 'Mouser', 'Best Vendor', 'Savings'];
+    const headers = ['Part Number', 'Description', 'Qty', 'McMaster', 'Grainger', 'DigiKey', 'Mouser', 'AI Best', 'AI Source', 'Best Vendor', 'Savings'];
     const rows = bom.items.map(item => [
       item.partNumber,
       `"${item.description.replace(/"/g, '""')}"`,
@@ -241,6 +241,8 @@ export default function Dashboard() {
       item.grainger ?? '',
       item.digikey ?? '',
       item.mouser ?? '',
+      item.claudeIntel?.bestPrice?.toFixed(2) ?? '',
+      item.claudeIntel?.bestSource ?? '',
       item.bestVendor,
       item.savings.toFixed(2),
     ].join(','));
@@ -256,9 +258,9 @@ export default function Dashboard() {
 
   const copyBomData = useCallback((bom: Bom) => {
     const lines = bom.items.map(item => 
-      `${item.partNumber}\t${item.description}\t${item.qty}\t${item.mcmaster || '-'}\t${item.grainger || '-'}\t${item.digikey || '-'}\t${item.mouser || '-'}\t${item.bestVendor}\t$${item.savings.toFixed(2)}`
+      `${item.partNumber}\t${item.description}\t${item.qty}\t${item.mcmaster || '-'}\t${item.grainger || '-'}\t${item.digikey || '-'}\t${item.mouser || '-'}\t${item.claudeIntel?.bestPrice ? `$${item.claudeIntel.bestPrice.toFixed(2)} (${item.claudeIntel.bestSource})` : '-'}\t${item.bestVendor}\t$${item.savings.toFixed(2)}`
     );
-    const header = 'Part Number\tDescription\tQty\tMcMaster\tGrainger\tDigiKey\tMouser\tBest Vendor\tSavings';
+    const header = 'Part Number\tDescription\tQty\tMcMaster\tGrainger\tDigiKey\tMouser\tAI Best\tBest Vendor\tSavings';
     const text = [header, ...lines].join('\n');
     navigator.clipboard.writeText(text);
     setCopiedBom(bom.id);
@@ -485,6 +487,7 @@ export default function Dashboard() {
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Grainger</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">DigiKey</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Mouser</th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-purple-400/50 uppercase tracking-wider">🤖 AI</th>
                             <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Best</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Saved</th>
                           </tr>
@@ -557,6 +560,21 @@ export default function Dashboard() {
                                 <PriceCell val={item.grainger} />
                                 <PriceCell val={item.digikey} />
                                 <PriceCell val={item.mouser} />
+                                <td className={`px-3 py-3 text-right text-xs font-mono ${item.claudeIntel?.bestPrice ? 'text-purple-400 font-medium bg-purple-500/[0.06]' : 'text-white/10'}`}>
+                                  {item.claudeIntel?.bestPrice ? (
+                                    item.claudeIntel.sourceUrl ? (
+                                      <a href={item.claudeIntel.sourceUrl} target="_blank" rel="noopener" className="hover:text-purple-300 transition-colors">
+                                        ${item.claudeIntel.bestPrice.toFixed(2)}
+                                        <span className="block text-[8px] text-purple-400/40">{item.claudeIntel.bestSource}</span>
+                                      </a>
+                                    ) : (
+                                      <span>
+                                        ${item.claudeIntel.bestPrice.toFixed(2)}
+                                        <span className="block text-[8px] text-purple-400/40">{item.claudeIntel.bestSource}</span>
+                                      </span>
+                                    )
+                                  ) : '—'}
+                                </td>
                                 <td className="px-3 py-3">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                     {item.bestVendor}
@@ -571,7 +589,7 @@ export default function Dashboard() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-white/[0.06]">
-                            <td colSpan={7} className="px-5 py-3 text-right text-xs text-white/40 font-mono">TOTAL SAVINGS</td>
+                            <td colSpan={8} className="px-5 py-3 text-right text-xs text-white/40 font-mono">TOTAL SAVINGS</td>
                             <td className="px-3 py-3 text-right text-sm font-mono font-bold text-emerald-400">${bom.totalSavings.toFixed(2)}</td>
                           </tr>
                         </tfoot>
