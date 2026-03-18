@@ -37,6 +37,17 @@ export interface PricingRequest {
   }[];
 }
 
+export interface MarketIntel {
+  bestPrice: number | null;
+  bestSource: string | null;
+  sourceUrl: string | null;
+  allFindings: Array<{
+    distributor: string;
+    price: number;
+    url: string;
+  }>;
+}
+
 export interface PricedItem {
   partNumber: string;
   description: string;
@@ -58,6 +69,7 @@ export interface PricedItem {
       leadTimeDays: number | null;
     };
   };
+  marketIntel?: MarketIntel;
 }
 
 export interface PricingResponse {

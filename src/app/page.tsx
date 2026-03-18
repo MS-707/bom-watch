@@ -14,6 +14,13 @@ interface VendorDetail {
   leadTimeDays: number | null;
 }
 
+interface MarketIntel {
+  bestPrice: number | null;
+  bestSource: string | null;
+  sourceUrl: string | null;
+  allFindings: Array<{ distributor: string; price: number; url: string }>;
+}
+
 interface BomItem {
   partNumber: string;
   description: string;
@@ -25,6 +32,7 @@ interface BomItem {
   bestVendor: string;
   savings: number;
   details?: { [vendor: string]: VendorDetail };
+  marketIntel?: MarketIntel;
 }
 
 interface Bom {
@@ -145,7 +153,7 @@ export default function Dashboard() {
       const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
       setManualBomCounter(prev => prev + 1);
 
-      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail } }) => ({
+      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail }; marketIntel?: MarketIntel }) => ({
         partNumber: item.partNumber,
         description: item.description || `Part ${item.partNumber}`,
         qty: item.qty,
@@ -156,6 +164,7 @@ export default function Dashboard() {
         bestVendor: item.bestVendor,
         savings: item.savings,
         details: item.details,
+        marketIntel: item.marketIntel,
       }));
 
       const totalSavings = analyzedItems.reduce((sum, i) => sum + i.savings, 0);
@@ -493,6 +502,17 @@ export default function Dashboard() {
                                           <ExternalLink className="w-2.5 h-2.5" />
                                           {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
                                           {detail.stockQty !== null && <span className="text-white/20">({detail.stockQty.toLocaleString()} in stock)</span>}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {item.marketIntel && item.marketIntel.allFindings.length > 0 && (
+                                    <div className="mt-1.5 flex items-center gap-1.5">
+                                      <span className="text-[9px] text-amber-400/70">💡</span>
+                                      {item.marketIntel.allFindings.slice(0, 3).map((finding, fi) => (
+                                        <a key={fi} href={finding.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-amber-400/50 hover:text-amber-400 transition-colors">
+                                          {finding.distributor} ${finding.price.toFixed(2)}
+                                          {fi < Math.min(2, item.marketIntel!.allFindings.length - 1) && <span className="text-white/10">·</span>}
                                         </a>
                                       ))}
                                     </div>
