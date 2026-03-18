@@ -170,7 +170,8 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
           allFindings: intelData.allFindings,
         };
 
-        // If market intel found a better price than our direct APIs, update savings
+        // Market intel updates savings calculation but does NOT override bestVendor
+        // (bestVendor should only reflect the 4 main vendor columns for clarity)
         if (intelData.bestPrice !== null && item.bestPrice !== null && intelData.bestPrice < item.bestPrice) {
           const highestPrice = Math.max(
             item.vendors.mcmaster || 0, item.vendors.grainger || 0,
@@ -178,8 +179,6 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
             item.bestPrice
           );
           item.savings = parseFloat(((highestPrice - intelData.bestPrice) * item.qty).toFixed(2));
-          item.bestVendor = intelData.bestSource || item.bestVendor;
-          item.bestPrice = intelData.bestPrice;
         }
       }
     }
@@ -202,7 +201,8 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
           alternatives: claudeData.alternatives,
         };
 
-        // If Claude found a better price, update best vendor
+        // Claude intel updates savings but does NOT override bestVendor
+        // (AI prices are shown in their own column; bestVendor stays with the 4 main vendors)
         if (claudeData.bestPrice !== null && (item.bestPrice === null || claudeData.bestPrice < item.bestPrice)) {
           const highestPrice = Math.max(
             item.vendors.mcmaster || 0, item.vendors.grainger || 0,
@@ -212,8 +212,6 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
           if (highestPrice > 0) {
             item.savings = parseFloat(((highestPrice - claudeData.bestPrice) * item.qty).toFixed(2));
           }
-          item.bestVendor = claudeData.bestSource || item.bestVendor;
-          item.bestPrice = claudeData.bestPrice;
         }
       }
     }

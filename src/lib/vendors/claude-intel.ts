@@ -47,21 +47,19 @@ export async function claudeAnalyzePart(partNumber: string): Promise<ClaudeIntel
         }],
         messages: [{
           role: 'user',
-          content: `Find the best current price for electronic component "${partNumber}". Search distributor websites.
+          content: `You are a procurement pricing assistant. Search for current pricing on electronic/mechanical component "${partNumber}" from major distributors (DigiKey, Mouser, Arrow, Newark, LCSC, McMaster-Carr, Grainger, etc).
 
-Return ONLY a JSON object (no markdown, no explanation) with this exact format:
-{
-  "bestPrice": 0.52,
-  "bestSource": "Arrow",
-  "sourceUrl": "https://www.arrow.com/...",
-  "insight": "One sentence about availability, lead time, or substitutes",
-  "alternatives": [
-    {"distributor": "DigiKey", "price": 0.58, "url": "https://...", "note": "In stock"},
-    {"distributor": "Mouser", "price": 0.62, "url": "https://...", "note": "2500+ in stock"}
-  ]
-}
+IMPORTANT: You MUST return a JSON object with pricing data. If web search results don't show exact prices, use your knowledge of typical distributor pricing for this component to provide your best estimate. Never say you can't find pricing — always provide your best data.
 
-If the part is obsolete, say so in the insight and suggest alternatives. Prices in USD. Max 3 alternatives.`
+Return ONLY a valid JSON object (no markdown fences, no explanation before or after) in this exact format:
+{"bestPrice": 3.50, "bestSource": "LCSC", "sourceUrl": "https://www.lcsc.com/product-detail/...", "insight": "One sentence about availability or alternatives", "alternatives": [{"distributor": "DigiKey", "price": 4.20, "url": "https://www.digikey.com/...", "note": "In stock"}, {"distributor": "Mouser", "price": 4.35, "url": "https://www.mouser.com/...", "note": "2500+ in stock"}]}
+
+Rules:
+- Prices in USD per unit for qty 1
+- Max 3 alternatives
+- If part is obsolete, set insight to explain and suggest a replacement
+- Always include bestPrice and bestSource even if estimated
+- Use real distributor URLs where possible`
         }],
       }),
     });
