@@ -101,7 +101,12 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(`API ${res.status}`);
       const data = await res.json();
       if (data.boms && data.boms.length > 0) {
-        setBoms(data.boms);
+        // Preserve manually added BOMs during refresh
+        setBoms(prev => {
+          const manualBoms = prev.filter(b => b.status === 'manual');
+          const apiBoms = data.boms.filter((b: Bom) => b.status !== 'manual');
+          return [...manualBoms, ...apiBoms];
+        });
         setStats({
           totalSavingsMonth: data.stats?.totalSavingsMonth ?? fallbackStats.totalSavingsMonth,
           bomsAnalyzed: data.stats?.bomsAnalyzed ?? fallbackStats.bomsAnalyzed,
