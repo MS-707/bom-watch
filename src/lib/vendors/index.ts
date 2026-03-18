@@ -112,7 +112,7 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
         if (!item.description && oem.description) {
           item.description = oem.description;
         }
-      } else if (!useOemSecrets) {
+      } else {
         // --- Fallback: individual vendor API queries ---
         const vendorResults = await Promise.allSettled(
           clients.map(async (client) => {
