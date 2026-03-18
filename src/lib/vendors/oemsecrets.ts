@@ -127,15 +127,18 @@ export async function searchOemSecrets(partNumber: string, qty: number = 1): Pro
 
   try {
     const url = `https://oemsecretsapi.com/partsearch?searchTerm=${encodeURIComponent(partNumber)}&apiKey=${apiKey}&countryCode=US&currency=USD`;
+    console.log(`[OEMSecrets] Fetching: ${partNumber}`);
     const res = await fetch(url);
 
     if (!res.ok) {
-      console.error(`[OEMSecrets] API error (${res.status}) for "${partNumber}"`);
+      const body = await res.text();
+      console.error(`[OEMSecrets] API error (${res.status}) for "${partNumber}": ${body.slice(0, 200)}`);
       return empty;
     }
 
     const data = await res.json();
     const stocks: OemSecretsStockEntry[] = data?.stock || [];
+    console.log(`[OEMSecrets] "${partNumber}": status=${data?.status}, parts_returned=${data?.parts_returned}, stocks=${stocks.length}`);
 
     if (stocks.length === 0) return empty;
 
