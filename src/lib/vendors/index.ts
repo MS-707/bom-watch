@@ -72,8 +72,11 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
   const configuredVendors = clients.filter(c => c.isConfigured()).map(c => c.name);
   const hasLiveVendors = clients.some(c => c.name !== 'Grainger' && c.isConfigured());
 
-  // Run market intelligence search in parallel with vendor queries
-  const marketIntelPromise = searchMarketPrices(request.items.map(i => i.partNumber));
+  // Run market intelligence search in parallel with vendor queries (non-blocking, 8s timeout)
+  const marketIntelPromise: Promise<Map<string, unknown>> = Promise.race([
+    searchMarketPrices(request.items.map(i => i.partNumber)) as Promise<Map<string, unknown>>,
+    new Promise<Map<string, unknown>>((resolve) => setTimeout(() => resolve(new Map()), 8000)),
+  ]);
 
   const pricedItems: PricedItem[] = await Promise.all(
     request.items.map(async (item) => {
@@ -153,30 +156,35 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
     })
   );
 
-  // Merge market intelligence results
-  const marketIntelResults = await marketIntelPromise;
-  for (const item of pricedItems) {
-    const intel = marketIntelResults.get(item.partNumber);
-    if (intel && intel.searchPerformed) {
-      item.marketIntel = {
-        bestPrice: intel.bestPrice,
-        bestSource: intel.bestSource,
-        sourceUrl: intel.sourceUrl,
-        allFindings: intel.allFindings,
-      };
+  // Merge market intelligence results (non-blocking — if it times out, we still return vendor data)
+  try {
+    const marketIntelResults = await marketIntelPromise;
+    for (const item of pricedItems) {
+      const intel = marketIntelResults.get(item.partNumber);
+      if (intel && (intel as { searchPerformed?: boolean }).searchPerformed) {
+        const intelData = intel as { bestPrice: number | null; bestSource: string | null; sourceUrl: string | null; allFindings: Array<{ distributor: string; price: number; url: string }> };
+        item.marketIntel = {
+          bestPrice: intelData.bestPrice,
+          bestSource: intelData.bestSource,
+          sourceUrl: intelData.sourceUrl,
+          allFindings: intelData.allFindings,
+        };
 
-      // If market intel found a better price than our direct APIs, update savings
-      if (intel.bestPrice !== null && item.bestPrice !== null && intel.bestPrice < item.bestPrice) {
-        const highestPrice = Math.max(
-          item.vendors.mcmaster || 0, item.vendors.grainger || 0,
-          item.vendors.digikey || 0, item.vendors.mouser || 0,
-          item.bestPrice
-        );
-        item.savings = parseFloat(((highestPrice - intel.bestPrice) * item.qty).toFixed(2));
-        item.bestVendor = intel.bestSource || item.bestVendor;
-        item.bestPrice = intel.bestPrice;
+        // If market intel found a better price than our direct APIs, update savings
+        if (intelData.bestPrice !== null && item.bestPrice !== null && intelData.bestPrice < item.bestPrice) {
+          const highestPrice = Math.max(
+            item.vendors.mcmaster || 0, item.vendors.grainger || 0,
+            item.vendors.digikey || 0, item.vendors.mouser || 0,
+            item.bestPrice
+          );
+          item.savings = parseFloat(((highestPrice - intelData.bestPrice) * item.qty).toFixed(2));
+          item.bestVendor = intelData.bestSource || item.bestVendor;
+          item.bestPrice = intelData.bestPrice;
+        }
       }
     }
+  } catch (err) {
+    console.error('[Pricing] Market intel merge failed (non-fatal):', err);
   }
 
   const totalSavings = parseFloat(
