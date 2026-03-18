@@ -81,6 +81,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [manualBomOpen, setManualBomOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<DataSource>('demo');
   const [manualBomCounter, setManualBomCounter] = useState(0);
 
@@ -162,7 +163,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('[BOM Watch] Pricing error:', err);
       // Show the error state — in a real app we'd have a toast/notification
-      alert('Failed to analyze parts. Check console for details.');
+      setAnalysisError('Failed to analyze parts. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -172,7 +173,9 @@ export default function Dashboard() {
   useEffect(() => {
     setIsLoading(true);
     fetchBoms();
-    const interval = setInterval(fetchBoms, 60000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchBoms();
+    }, 60000);
     return () => clearInterval(interval);
   }, [fetchBoms]);
 
@@ -185,7 +188,7 @@ export default function Dashboard() {
       const matchesStatus = statusFilter === 'all' || bom.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, boms]);
 
   const statusCounts = useMemo(() => ({
     all: boms.length,
@@ -199,7 +202,7 @@ export default function Dashboard() {
     const headers = ['Part Number', 'Description', 'Qty', 'McMaster', 'Grainger', 'DigiKey', 'Mouser', 'Best Vendor', 'Savings'];
     const rows = bom.items.map(item => [
       item.partNumber,
-      `"${item.description}"`,
+      `"${item.description.replace(/"/g, '""')}"`,
       item.qty,
       item.mcmaster ?? '',
       item.grainger ?? '',
@@ -574,6 +577,19 @@ export default function Dashboard() {
         </div>
         </>}
       </main>
+
+      {/* Error Toast */}
+      {analysisError && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in">
+          <div className="bg-red-500/20 border border-red-500/30 rounded-xl px-5 py-3 flex items-center gap-3 shadow-2xl backdrop-blur-md">
+            <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-300">{analysisError}</p>
+            <button onClick={() => setAnalysisError(null)} className="text-red-400/50 hover:text-red-400 transition-colors p-1">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <footer className="border-t border-white/[0.04] mt-8 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-1">

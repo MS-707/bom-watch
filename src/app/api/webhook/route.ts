@@ -47,13 +47,15 @@ interface ArenaWebhookPayload {
 
 export async function POST(req: NextRequest) {
   try {
-    const payload: ArenaWebhookPayload = await req.json();
+    // Verify webhook authentication
+    if (ARENA_WEBHOOK_SECRET) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader !== `Bearer ${ARENA_WEBHOOK_SECRET}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
 
-    // TODO: Verify webhook signature when Arena provides one
-    // const signature = req.headers.get('x-arena-signature');
-    // if (!verifySignature(payload, signature, ARENA_WEBHOOK_SECRET)) {
-    //   return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    // }
+    const payload: ArenaWebhookPayload = await req.json();
 
     console.log(`[BOM Watch] Webhook received: ${payload.event} for ${payload.data.number}`);
 
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: `🔍 *New BOM Detected* — ${payload.data.name} (${payload.data.number})\n${lineItems.length} line items · Engineer: ${payload.data.owner.fullName}\nView analysis: https://bom-watch.vercel.app`,
+            text: `🔍 *New BOM Detected* — ${payload.data.name.replace(/[*_~\`<>]/g, '')} (${payload.data.number.replace(/[*_~\`<>]/g, '')})\n${lineItems.length} line items · Engineer: ${(payload.data.owner.fullName || '').replace(/[*_~\`<>]/g, '')}\nView analysis: https://bom-watch.vercel.app`,
           }),
         });
       } catch (slackErr) {
