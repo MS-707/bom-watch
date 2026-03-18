@@ -89,9 +89,9 @@ export async function GET(req: NextRequest) {
     offset,
     live: isLive,
     stats: {
-      totalSavingsMonth: results.reduce((sum, b) => sum + b.totalSavings, 0),
+      totalSavingsMonth: parseFloat(results.reduce((sum, b) => sum + b.totalSavings, 0).toFixed(2)),
       bomsAnalyzed: results.length,
-      avgSavingsPerBom: results.reduce((sum, b) => sum + b.totalSavings, 0) / results.length,
+      avgSavingsPerBom: parseFloat((results.reduce((sum, b) => sum + b.totalSavings, 0) / results.length).toFixed(2)),
     }
   });
 }
