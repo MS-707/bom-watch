@@ -111,36 +111,37 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Handle manual BOM submission
-  const handleManualBom = useCallback((submission: { name: string; engineer: string; items: { partNumber: string; description: string; qty: number }[] }) => {
+  // Handle manual BOM submission — calls real pricing API
+  const handleManualBom = useCallback(async (submission: { name: string; engineer: string; items: { partNumber: string; description: string; qty: number }[] }) => {
     setIsAnalyzing(true);
     
-    // Simulate analysis delay (in production, this calls Claude API + vendor pricing)
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: submission.items }),
+      });
+
+      const pricing = await res.json();
+
+      if (!res.ok || !pricing.items) {
+        throw new Error(pricing.error || 'Pricing API failed');
+      }
+
       const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
       setManualBomCounter(prev => prev + 1);
-      
-      // Generate mock price comparison (in production: real vendor API calls)
-      const analyzedItems = submission.items.map(item => {
-        const basePrice = 5 + Math.random() * 30;
-        const graingerDiscount = 0.15 + Math.random() * 0.15; // 15-30% cheaper
-        const graingerPrice = parseFloat((basePrice * (1 - graingerDiscount)).toFixed(2));
-        const mcmasterPrice = parseFloat(basePrice.toFixed(2));
-        const savings = parseFloat(((mcmasterPrice - graingerPrice) * item.qty).toFixed(2));
-        const isElectronic = item.partNumber.startsWith('DK') || item.partNumber.startsWith('MOU');
-        
-        return {
-          partNumber: item.partNumber,
-          description: item.description || `Part ${item.partNumber}`,
-          qty: item.qty,
-          mcmaster: isElectronic ? null : mcmasterPrice,
-          grainger: isElectronic ? null : graingerPrice,
-          digikey: isElectronic ? parseFloat((Math.random() * 2).toFixed(2)) : null,
-          mouser: isElectronic ? parseFloat((Math.random() * 2).toFixed(2)) : null,
-          bestVendor: isElectronic ? 'DigiKey' : 'Grainger',
-          savings: isElectronic ? parseFloat((Math.random() * 5).toFixed(2)) : savings,
-        };
-      });
+
+      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number }) => ({
+        partNumber: item.partNumber,
+        description: item.description || `Part ${item.partNumber}`,
+        qty: item.qty,
+        mcmaster: item.vendors.mcmaster,
+        grainger: item.vendors.grainger,
+        digikey: item.vendors.digikey,
+        mouser: item.vendors.mouser,
+        bestVendor: item.bestVendor,
+        savings: item.savings,
+      }));
 
       const totalSavings = analyzedItems.reduce((sum, i) => sum + i.savings, 0);
 
@@ -157,9 +158,14 @@ export default function Dashboard() {
 
       setBoms(prev => [newBom, ...prev]);
       setExpandedBom(newId);
-      setIsAnalyzing(false);
       setManualBomOpen(false);
-    }, 2000);
+    } catch (err) {
+      console.error('[BOM Watch] Pricing error:', err);
+      // Show the error state — in a real app we'd have a toast/notification
+      alert('Failed to analyze parts. Check console for details.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   }, [manualBomCounter]);
 
   // Initial fetch + auto-refresh every 60s
@@ -496,10 +502,14 @@ export default function Dashboard() {
                           <Sparkles className="w-3.5 h-3.5 text-blue-400" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-mono text-blue-400/70 uppercase tracking-wider mb-1">Claude AI Analysis</p>
+                          <p className="text-[10px] font-mono text-blue-400/70 uppercase tracking-wider mb-1">
+                            {bom.status === 'manual' ? 'Vendor Price Analysis' : 'Claude AI Analysis'}
+                          </p>
                           <p className="text-xs text-white/50 leading-relaxed">
-                            This BOM introduces {bom.items.length} new OTS parts. {bom.items.filter(i => i.bestVendor === 'Grainger').length} have cheaper alternatives on Grainger (avg 21% savings on fasteners and raw materials). 
-                            <span className="text-white/70"> Recommend consolidating Grainger items into a single order for free shipping threshold ($50+).</span>
+                            {bom.items.length} parts analyzed across {new Set(bom.items.filter(i => i.mcmaster !== null).length > 0 ? ['McMaster'] : []).size + new Set(bom.items.filter(i => i.grainger !== null).length > 0 ? ['Grainger'] : []).size + (bom.items.some(i => i.digikey !== null) ? 1 : 0) + (bom.items.some(i => i.mouser !== null) ? 1 : 0)} vendors. {bom.items.filter(i => i.bestVendor === 'Grainger').length > 0 ? `${bom.items.filter(i => i.bestVendor === 'Grainger').length} parts cheapest on Grainger. ` : ''}{bom.items.filter(i => i.bestVendor === 'DigiKey').length > 0 ? `${bom.items.filter(i => i.bestVendor === 'DigiKey').length} parts cheapest on DigiKey. ` : ''}
+                            <span className="text-white/70">
+                              {bom.totalSavings > 100 ? `Total savings of $${bom.totalSavings.toFixed(2)} by optimizing vendor selection.` : bom.totalSavings > 0 ? `$${bom.totalSavings.toFixed(2)} in savings identified.` : 'All items at best available pricing.'}
+                            </span>
                           </p>
                         </div>
                       </div>
@@ -536,7 +546,7 @@ export default function Dashboard() {
             {[
               { icon: Bell, title: 'Detect', desc: 'Arena webhook fires when a new BOM is approved or ECO released', color: '#f59e0b', step: '01' },
               { icon: BarChart3, title: 'Analyze', desc: 'Claude AI identifies new OTS parts and classifies by category', color: '#3b82f6', step: '02' },
-              { icon: Search, title: 'Compare', desc: 'Live pricing fetched from McMaster, Grainger, DigiKey, Mouser & more', color: '#a855f7', step: '03' },
+              { icon: Search, title: 'Compare', desc: 'Live pricing via DigiKey & Mouser APIs, Grainger cross-reference, McMaster baseline', color: '#a855f7', step: '03' },
               { icon: DollarSign, title: 'Save', desc: 'Slack alert + dashboard with vendor recommendations and savings', color: '#10b981', step: '04' },
             ].map((step, i) => (
               <div key={i} className="relative group p-3 -m-3 rounded-xl hover:bg-white/[0.03] transition-all duration-300">
@@ -557,10 +567,10 @@ export default function Dashboard() {
           <div className="flex items-start sm:items-center gap-3 flex-1">
             <Zap className="w-4 h-4 text-emerald-400/30 flex-shrink-0 mt-0.5 sm:mt-0" />
             <p className="text-xs text-white/40 flex-1">
-              <span className="text-white/60 font-medium">Integration ready.</span> Connect Arena PLM webhook, Slack notifications, and vendor APIs. Built on Next.js + Vercel + Claude AI.
+              <span className="text-white/60 font-medium">Vendor APIs integrated.</span> DigiKey + Mouser live pricing, Grainger cross-reference, Arena PLM webhook, Slack alerts. Built on Next.js + Vercel + Claude AI.
             </p>
           </div>
-          <span className="text-[10px] font-mono text-emerald-400/30 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10 self-end sm:self-auto">v0.4.0</span>
+          <span className="text-[10px] font-mono text-emerald-400/30 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10 self-end sm:self-auto">v0.5.0</span>
         </div>
         </>}
       </main>

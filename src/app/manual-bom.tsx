@@ -245,7 +245,7 @@ export function ManualBomDrawer({ isOpen, onClose, onSubmit, isAnalyzing }: Manu
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-lg hover:bg-emerald-500/30 transition-all border border-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analyzing {itemCount} parts...</>
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Querying vendor APIs...</>
                 ) : (
                   <><Sparkles className="w-3.5 h-3.5" /> Analyze {itemCount} Parts</>
                 )}
