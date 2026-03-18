@@ -18,9 +18,9 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
-/* Smooth transitions */
-* {
-  transition-property: background-color, border-color, color, opacity;
+/* Smooth transitions — scoped to interactive elements, not all (*) which can jank layout */
+a, button, input, [role="button"] {
+  transition-property: background-color, border-color, color, opacity, transform;
   transition-duration: 150ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

@@ -59,19 +59,20 @@ export default function Dashboard() {
       <header className="border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center flex-shrink-0">
                 <Package className="w-4 h-4 text-white/60" />
               </div>
               <div>
-                <h1 className="text-lg font-medium text-white tracking-tight">BOM Watch</h1>
-                <p className="text-[11px] text-white/40 font-mono">PROCUREMENT INTELLIGENCE</p>
+                <h1 className="text-base sm:text-lg font-medium text-white tracking-tight">BOM Watch</h1>
+                <p className="text-[10px] sm:text-[11px] text-white/40 font-mono">PROCUREMENT INTELLIGENCE</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
-                <span className="text-[11px] font-medium text-emerald-400 font-mono">ARENA CONNECTED</span>
+                <span className="text-[10px] sm:text-[11px] font-medium text-emerald-400 font-mono hidden sm:inline">ARENA CONNECTED</span>
+                <span className="text-[10px] font-medium text-emerald-400 font-mono sm:hidden">LIVE</span>
               </div>
             </div>
           </div>
@@ -87,7 +88,7 @@ export default function Dashboard() {
             { icon: TrendingDown, label: 'Avg Savings / BOM', value: `$${stats.avgSavingsPerBom}`, sub: 'Grainger saves most', subColor: 'text-white/30' },
             { icon: Zap, label: 'Detection Speed', value: stats.avgTimeToNotify, sub: 'After BOM approval', subColor: 'text-white/30' },
           ].map((stat, i) => (
-            <div key={i} className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06] hover:border-white/10 transition-all duration-300">
+            <div key={i} className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05] hover:scale-[1.02] transition-all duration-300 cursor-default">
               <div className="flex items-center gap-2 mb-2">
                 <stat.icon className="w-3.5 h-3.5 text-emerald-400" />
                 <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">{stat.label}</span>
@@ -134,9 +135,9 @@ export default function Dashboard() {
 
         {/* BOM List */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="text-sm font-medium text-white/80">Recent BOM Changes</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-white/30 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input 
@@ -144,12 +145,12 @@ export default function Dashboard() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search BOMs, engineers..." 
-                  className="bg-white/[0.03] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 focus:bg-white/[0.05] w-56 transition-all duration-200" 
+                  className="bg-white/[0.03] border border-white/[0.06] rounded-lg pl-8 pr-3 py-2 sm:py-1.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/20 focus:bg-white/[0.05] w-full sm:w-56 transition-all duration-200" 
                 />
               </div>
               <div className="flex gap-1">
                 {['all', 'analyzed', 'ordered'].map(s => (
-                  <button key={s} onClick={() => setStatusFilter(s)} className={`px-2.5 py-1.5 text-[10px] font-mono rounded-lg transition-all duration-200 ${statusFilter === s ? 'bg-white/10 text-white border border-white/20' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03] border border-transparent'}`}>
+                  <button key={s} onClick={() => setStatusFilter(s)} className={`flex-1 sm:flex-none px-2.5 py-2 sm:py-1.5 text-[10px] font-mono rounded-lg transition-all duration-200 ${statusFilter === s ? 'bg-white/10 text-white border border-white/20' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03] border border-transparent'}`}>
                     {s === 'all' ? 'ALL' : s.toUpperCase()}
                   </button>
                 ))}
@@ -166,22 +167,22 @@ export default function Dashboard() {
 
           <div className="space-y-3">
             {filteredBOMs.map((bom) => (
-              <div key={bom.id} className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden hover:border-white/10 transition-all duration-300">
-                <button onClick={() => setExpandedBom(expandedBom === bom.id ? null : bom.id)} className="w-full px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.02] transition-colors duration-200">
-                  <div className="flex items-center gap-4 text-left">
-                    <div>
-                      <div className="flex items-center gap-2">
+              <div key={bom.id} className="bg-white/[0.02] rounded-xl border border-white/[0.06] overflow-hidden hover:border-white/10 hover:bg-white/[0.03] transition-all duration-300">
+                <button onClick={() => setExpandedBom(expandedBom === bom.id ? null : bom.id)} className="w-full px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 cursor-pointer hover:bg-white/[0.02] transition-colors duration-200">
+                  <div className="flex items-start sm:items-center gap-4 text-left min-w-0">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span className="text-[11px] font-mono text-white/30">{bom.id}</span>
-                        <h3 className="font-medium text-white text-sm">{bom.name}</h3>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${bom.status === 'analyzed' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                        <h3 className="font-medium text-white text-sm truncate">{bom.name}</h3>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium whitespace-nowrap ${bom.status === 'analyzed' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
                           {bom.status.toUpperCase()}
                         </span>
                       </div>
                       <p className="text-xs text-white/30 mt-0.5">{bom.engineer} · {bom.approvedAt} · {bom.newParts} new parts</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
+                  <div className="flex items-center justify-between sm:justify-end gap-4 pl-0 sm:pl-4">
+                    <div className="text-left sm:text-right">
                       <p className="text-lg font-light text-emerald-400">${bom.totalSavings.toFixed(2)}</p>
                       <p className="text-[10px] text-white/30 font-mono">SAVINGS</p>
                     </div>
@@ -194,6 +195,10 @@ export default function Dashboard() {
                 {/* Expanded Price Table */}
                 {expandedBom === bom.id && bom.items.length > 0 && (
                   <div className="border-t border-white/[0.06] animate-in">
+                    <div className="sm:hidden px-4 py-2 flex items-center gap-1.5 text-[10px] text-white/20 border-b border-white/[0.04]">
+                      <ArrowRight className="w-3 h-3" />
+                      <span>Scroll for full comparison table</span>
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -281,15 +286,15 @@ export default function Dashboard() {
         {/* How It Works */}
         <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-6 mb-6">
           <h2 className="text-sm font-medium text-white/80 mb-5">How BOM Watch Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {[
               { icon: Bell, title: 'Detect', desc: 'Arena webhook fires when a new BOM is approved or ECO released', color: '#f59e0b' },
               { icon: BarChart3, title: 'Analyze', desc: 'Claude AI identifies new OTS parts and classifies by category', color: '#3b82f6' },
               { icon: Search, title: 'Compare', desc: 'Live pricing fetched from McMaster, Grainger, DigiKey, Mouser & more', color: '#a855f7' },
               { icon: DollarSign, title: 'Save', desc: 'Slack alert + dashboard with vendor recommendations and savings', color: '#10b981' },
             ].map((step, i) => (
-              <div key={i} className="relative">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: `${step.color}15`, border: `1px solid ${step.color}30` }}>
+              <div key={i} className="relative group p-3 -m-3 rounded-xl hover:bg-white/[0.03] transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300" style={{ background: `${step.color}15`, border: `1px solid ${step.color}30` }}>
                   <step.icon className="w-5 h-5" style={{ color: step.color }} />
                 </div>
                 <h3 className="font-medium text-white text-sm mb-1">{step.title}</h3>
@@ -301,19 +306,21 @@ export default function Dashboard() {
         </div>
 
         {/* Footer bar */}
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 flex items-center gap-4">
-          <Zap className="w-4 h-4 text-white/20 flex-shrink-0" />
-          <p className="text-xs text-white/40 flex-1">
-            <span className="text-white/60 font-medium">Integration ready.</span> Connect Arena PLM webhook, Slack notifications, and vendor APIs. Built on Next.js + Vercel + Claude AI.
-          </p>
-          <span className="text-[10px] font-mono text-white/20">v0.2.0</span>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-start sm:items-center gap-3 flex-1">
+            <Zap className="w-4 h-4 text-white/20 flex-shrink-0 mt-0.5 sm:mt-0" />
+            <p className="text-xs text-white/40 flex-1">
+              <span className="text-white/60 font-medium">Integration ready.</span> Connect Arena PLM webhook, Slack notifications, and vendor APIs. Built on Next.js + Vercel + Claude AI.
+            </p>
+          </div>
+          <span className="text-[10px] font-mono text-white/20 self-end sm:self-auto">v0.2.0</span>
         </div>
       </main>
 
       <footer className="border-t border-white/[0.04] mt-8 py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <p className="text-[11px] text-white/20 font-mono">BOM WATCH · MYTRA HACKATHON 2026</p>
-          <p className="text-[11px] text-white/20">Powered by Arena PLM + Claude AI + Vercel</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-1">
+          <p className="text-[10px] sm:text-[11px] text-white/20 font-mono">BOM WATCH · MYTRA HACKATHON 2026</p>
+          <p className="text-[10px] sm:text-[11px] text-white/20">Powered by Arena PLM + Claude AI + Vercel</p>
         </div>
       </footer>
     </div>
