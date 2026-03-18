@@ -27,14 +27,27 @@ const clients: VendorClient[] = [
 // Part number prefix heuristics
 function detectVendorType(partNumber: string): 'mechanical' | 'electronic' | 'unknown' {
   const pn = partNumber.toUpperCase();
-  // McMaster-Carr style: numeric with optional letter suffix (91251A123, 5234K57)
-  if (/^MCM-/.test(pn) || /^\d{3,}[A-Z]?\d*$/.test(pn)) return 'mechanical';
-  // Grainger style: alphanumeric (6YF81, 5RY47)
-  if (/^GRN-/.test(pn) || /^\d[A-Z]{2}\d{2}$/.test(pn)) return 'mechanical';
-  // DigiKey style: MPN-ND suffix or alphanumeric with hyphens
-  if (/^DK-/.test(pn) || /-ND$/.test(pn) || /^[A-Z]{2,}\d/.test(pn)) return 'electronic';
-  // Mouser: typically MPN format
-  if (/^MOU-/.test(pn)) return 'electronic';
+  // Explicit McMaster-Carr prefix
+  if (/^MCM-/.test(pn)) return 'mechanical';
+  // Explicit Grainger prefix
+  if (/^GRN-/.test(pn)) return 'mechanical';
+  // Pure numeric McMaster style (91251A544, 5234K57)
+  if (/^\d{4,}[A-Z]\d+$/.test(pn)) return 'mechanical';
+  
+  // Common electronic part patterns
+  // Diode patterns: 1N, BAT, BAS, BZX
+  if (/^(1N|BAT|BAS|BZX|IN)\d/i.test(pn)) return 'electronic';
+  // IC/semiconductor: starts with letters + numbers (STM32, LM2596, SN74, OPA, AMS, IRF, ATM)
+  if (/^[A-Z]{2,}\d/i.test(pn)) return 'electronic';
+  // Resistor/capacitor patterns: RC0805, CRCW, GRM
+  if (/^(RC|CRCW|GRM|CC|CL)\d/i.test(pn)) return 'electronic';
+  // Switch/connector with letter-number-letter pattern: B3F-1000
+  if (/^[A-Z]\d[A-Z]-/i.test(pn)) return 'electronic';
+  // DigiKey style: -ND suffix
+  if (/-ND$/.test(pn)) return 'electronic';
+  // Explicit prefixes
+  if (/^(DK-|MOU-)/.test(pn)) return 'electronic';
+  
   return 'unknown';
 }
 

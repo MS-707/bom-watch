@@ -150,17 +150,22 @@ export async function searchMarketPrice(partNumber: string): Promise<MarketIntel
 }
 
 /**
- * Batch search multiple parts. Serialized to respect Brave rate limits (1 req/sec on lower tiers).
+ * Batch search multiple parts in parallel (Brave allows up to 50 req/sec).
  */
 export async function searchMarketPrices(partNumbers: string[]): Promise<Map<string, MarketIntelResult>> {
   const results = new Map<string, MarketIntelResult>();
 
-  for (const pn of partNumbers) {
-    const result = await searchMarketPrice(pn);
-    results.set(pn, result);
-    // Rate limit: 1 request per second on free tier
-    if (partNumbers.indexOf(pn) < partNumbers.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1100));
+  // Run all searches in parallel — Brave supports high throughput
+  const searches = await Promise.allSettled(
+    partNumbers.map(async (pn) => {
+      const result = await searchMarketPrice(pn);
+      return { pn, result };
+    })
+  );
+
+  for (const search of searches) {
+    if (search.status === 'fulfilled') {
+      results.set(search.value.pn, search.value.result);
     }
   }
 
