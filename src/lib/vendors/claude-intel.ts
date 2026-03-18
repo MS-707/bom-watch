@@ -1,10 +1,10 @@
 /**
  * Claude AI Price Intelligence
- * 
- * Uses Claude API with web_search tool to find the best price
- * for each part across the entire internet. Returns structured
- * pricing data with source links and AI insights.
- * 
+ *
+ * Uses Claude API with web_search to find distributor pricing
+ * across DigiKey, Arrow, Newark, LCSC, and others.
+ * Serves as the fallback when OEM Secrets is unavailable.
+ *
  * Required env vars:
  *   ANTHROPIC_API_KEY
  */
@@ -25,11 +25,6 @@ export interface ClaudeIntelResult {
 }
 
 export async function claudeAnalyzePart(partNumber: string): Promise<ClaudeIntelResult> {
-  // Skip Claude pricing search when OEM Secrets is configured (it provides better data)
-  if (process.env.OEMSECRETS_API_KEY) {
-    return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: '', alternatives: [], searched: false };
-  }
-
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: '', alternatives: [], searched: false };
@@ -52,25 +47,32 @@ export async function claudeAnalyzePart(partNumber: string): Promise<ClaudeIntel
         }],
         messages: [{
           role: 'user',
-          content: `You are a procurement pricing assistant. Search for current pricing on electronic/mechanical component "${partNumber}" from major distributors (DigiKey, Mouser, Arrow, Newark, LCSC, McMaster-Carr, Grainger, etc).
+          content: `Search for current pricing on "${partNumber}" from electronics distributors. Search these specific sites:
+- digikey.com
+- arrow.com
+- newark.com
+- lcsc.com
+- findchips.com
 
-IMPORTANT: You MUST return a JSON object with pricing data. If web search results don't show exact prices, use your knowledge of typical distributor pricing for this component to provide your best estimate. Never say you can't find pricing — always provide your best data.
+Find the actual unit price (qty 1, USD) and product page URL from each distributor that stocks this part.
 
-Return ONLY a valid JSON object (no markdown fences, no explanation before or after) in this exact format:
-{"bestPrice": 3.50, "bestSource": "LCSC", "sourceUrl": "https://www.lcsc.com/product-detail/...", "insight": "One sentence about availability or alternatives", "alternatives": [{"distributor": "DigiKey", "price": 4.20, "url": "https://www.digikey.com/...", "note": "In stock"}, {"distributor": "Mouser", "price": 4.35, "url": "https://www.mouser.com/...", "note": "2500+ in stock"}]}
+You MUST respond with ONLY a raw JSON object. No markdown, no backticks, no explanation. The JSON format:
+{"bestPrice": 3.50, "bestSource": "LCSC", "sourceUrl": "https://lcsc.com/product-detail/STM32F103C8T6.html", "insight": "Widely available from 5+ distributors", "alternatives": [{"distributor": "DigiKey", "price": 5.91, "url": "https://www.digikey.com/en/products/detail/stmicroelectronics/STM32F103C8T6/1646338", "note": "2782 in stock"}, {"distributor": "Arrow", "price": 4.28, "url": "https://www.arrow.com/en/products/stm32f103c8t6/stmicroelectronics", "note": "In stock"}]}
 
 Rules:
-- Prices in USD per unit for qty 1
-- Max 3 alternatives
-- If part is obsolete, set insight to explain and suggest a replacement
-- Always include bestPrice and bestSource even if estimated
-- Use real distributor URLs where possible`
+- USD prices only, per unit qty 1
+- Include REAL product page URLs (not search pages)
+- bestSource = cheapest distributor with stock
+- Max 3 alternatives, each from a different distributor
+- If you find the part on findchips.com or octopart.com, extract the distributor prices shown there
+- If part is obsolete or unavailable, say so in insight and suggest a replacement part number
+- ALWAYS return valid JSON even if prices are estimated`
         }],
       }),
     });
 
     if (!res.ok) {
-      console.error(`[ClaudeIntel] API failed (${res.status}): ${await res.text()}`);
+      console.error(`[ClaudeIntel] API failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
       return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: '', alternatives: [], searched: true };
     }
 
@@ -84,10 +86,12 @@ Rules:
       }
     }
 
-    // Parse JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    // Parse JSON from response — try to find the outermost JSON object
+    // Strip markdown fences if present
+    const cleaned = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('[ClaudeIntel] No JSON in response:', responseText.slice(0, 200));
+      console.error('[ClaudeIntel] No JSON in response:', responseText.slice(0, 300));
       return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: responseText.slice(0, 150), alternatives: [], searched: true };
     }
 
@@ -114,7 +118,7 @@ Rules:
 }
 
 /**
- * Analyze multiple parts in parallel. Claude API handles concurrent requests well.
+ * Analyze multiple parts in parallel.
  */
 export async function claudeAnalyzeParts(partNumbers: string[]): Promise<Map<string, ClaudeIntelResult>> {
   const results = new Map<string, ClaudeIntelResult>();

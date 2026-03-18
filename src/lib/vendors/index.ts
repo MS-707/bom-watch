@@ -75,13 +75,14 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
     ? searchOemSecretsBatch(partNumbers, request.items[0]?.qty || 1)
     : Promise.resolve(new Map());
 
-  // Only run market intel and Claude if OEM Secrets is NOT configured
+  // Always run Claude AI in parallel — it's the fallback for the AI column
+  // when OEM Secrets is unavailable or returns no data
+  const claudeIntelPromise: Promise<Map<string, unknown>> = claudeAnalyzeParts(partNumbers) as Promise<Map<string, unknown>>;
+
+  // Market intel via Brave search (skip when OEM Secrets is configured)
   const marketIntelPromise: Promise<Map<string, unknown>> = useOemSecrets
     ? Promise.resolve(new Map())
     : searchMarketPrices(partNumbers) as Promise<Map<string, unknown>>;
-  const claudeIntelPromise: Promise<Map<string, unknown>> = useOemSecrets
-    ? Promise.resolve(new Map())
-    : claudeAnalyzeParts(partNumbers) as Promise<Map<string, unknown>>;
 
   // Wait for OEM Secrets first (it's our primary source)
   const oemResults = await oemSecretsPromise;
@@ -209,26 +210,41 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
     } catch (err) {
       console.error('[Pricing] Market intel merge failed (non-fatal):', err);
     }
+  }
 
-    // Merge Claude AI analysis
-    try {
-      const claudeResults = await claudeIntelPromise;
-      for (const item of pricedItems) {
-        const claude = claudeResults.get(item.partNumber);
-        if (claude && (claude as { searched?: boolean }).searched) {
-          const claudeData = claude as { bestPrice: number | null; bestSource: string | null; sourceUrl: string | null; insight: string; alternatives: Array<{ distributor: string; price: number; url: string; note?: string }> };
-          item.claudeIntel = {
-            bestPrice: claudeData.bestPrice,
-            bestSource: claudeData.bestSource,
-            sourceUrl: claudeData.sourceUrl,
-            insight: claudeData.insight,
-            alternatives: claudeData.alternatives,
-          };
+  // Always merge Claude AI analysis — it's the fallback when OEM Secrets
+  // doesn't provide data. Only attach if item doesn't already have claudeIntel
+  // (OEM Secrets populates it when it works).
+  try {
+    const claudeResults = await claudeIntelPromise;
+    for (const item of pricedItems) {
+      if (item.claudeIntel) continue; // OEM Secrets already provided AI data
+      const claude = claudeResults.get(item.partNumber);
+      if (claude && (claude as { searched?: boolean }).searched) {
+        const claudeData = claude as { bestPrice: number | null; bestSource: string | null; sourceUrl: string | null; insight: string; alternatives: Array<{ distributor: string; price: number; url: string; note?: string }> };
+        item.claudeIntel = {
+          bestPrice: claudeData.bestPrice,
+          bestSource: claudeData.bestSource,
+          sourceUrl: claudeData.sourceUrl,
+          insight: claudeData.insight,
+          alternatives: claudeData.alternatives,
+        };
+
+        // Update savings if Claude found a cheaper price than main vendors
+        if (claudeData.bestPrice !== null && (item.bestPrice === null || claudeData.bestPrice < item.bestPrice)) {
+          const highestPrice = Math.max(
+            item.vendors.mcmaster || 0, item.vendors.grainger || 0,
+            item.vendors.digikey || 0, item.vendors.mouser || 0,
+            item.bestPrice || 0
+          );
+          if (highestPrice > 0) {
+            item.savings = parseFloat(((highestPrice - claudeData.bestPrice) * item.qty).toFixed(2));
+          }
         }
       }
-    } catch (err) {
-      console.error('[Pricing] Claude intel merge failed (non-fatal):', err);
     }
+  } catch (err) {
+    console.error('[Pricing] Claude intel merge failed (non-fatal):', err);
   }
 
   const totalSavings = parseFloat(
