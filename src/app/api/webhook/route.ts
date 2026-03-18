@@ -73,8 +73,19 @@ export async function POST(req: NextRequest) {
     // await storeBomAnalysis({ bom: payload.data, classification, pricing });
 
     // Step 5: Send Slack notification
-    // TODO: Fire Slack webhook with savings summary
-    // await notifySlack({ bom: payload.data, savings: pricing.totalSavings });
+    if (process.env.SLACK_WEBHOOK_URL) {
+      try {
+        await fetch(process.env.SLACK_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `🔍 *New BOM Detected* — ${payload.data.name} (${payload.data.number})\n${lineItems.length} line items · Engineer: ${payload.data.owner.fullName}\nView analysis: https://bom-watch.vercel.app`,
+          }),
+        });
+      } catch (slackErr) {
+        console.error('[BOM Watch] Slack notification failed:', slackErr);
+      }
+    }
 
     return NextResponse.json({ 
       status: 'received',

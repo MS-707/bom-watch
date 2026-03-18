@@ -79,11 +79,15 @@ export async function GET(req: NextRequest) {
 
   const paginated = results.slice(offset, offset + limit);
 
+  // TODO: Set live: true when connected to real Arena PLM data
+  const isLive = !!process.env.ARENA_API_KEY;
+
   return NextResponse.json({
     boms: paginated,
     total: results.length,
     limit,
     offset,
+    live: isLive,
     stats: {
       totalSavingsMonth: results.reduce((sum, b) => sum + b.totalSavings, 0),
       bomsAnalyzed: results.length,

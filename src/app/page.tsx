@@ -1,11 +1,42 @@
 "use client";
 
-import { useState, useMemo, useCallback } from 'react';
-import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, ChevronUp, Bell, BarChart3, Zap, Search, Filter, Copy, Download, ArrowUpRight, Sparkles } from 'lucide-react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, ChevronUp, Bell, BarChart3, Zap, Search, Filter, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { SavingsChart, VendorChart } from './charts';
 
-// --- Mock Data ---
-const recentBOMs = [
+// --- Types ---
+interface BomItem {
+  partNumber: string;
+  description: string;
+  qty: number;
+  mcmaster: number | null;
+  grainger: number | null;
+  digikey: number | null;
+  mouser: number | null;
+  bestVendor: string;
+  savings: number;
+}
+
+interface Bom {
+  id: string;
+  name: string;
+  engineer: string;
+  approvedAt: string;
+  status: string;
+  newParts: number;
+  totalSavings: number;
+  items: BomItem[];
+}
+
+interface Stats {
+  totalSavingsMonth: number;
+  bomsAnalyzed: number;
+  avgSavingsPerBom: number;
+  avgTimeToNotify: string;
+}
+
+// --- Fallback Mock Data (used until API is connected) ---
+const fallbackBOMs: Bom[] = [
   {
     id: 'BOM-2847', name: 'Gripper Assembly v3.2', engineer: 'Sarah Chen', approvedAt: '2 hours ago', status: 'analyzed', newParts: 5, totalSavings: 342.50,
     items: [
@@ -32,7 +63,7 @@ const recentBOMs = [
   },
 ];
 
-const stats = { totalSavingsMonth: 2847.30, bomsAnalyzed: 14, avgSavingsPerBom: 203.38, avgTimeToNotify: '< 30s' };
+const fallbackStats: Stats = { totalSavingsMonth: 2847.30, bomsAnalyzed: 14, avgSavingsPerBom: 203.38, avgTimeToNotify: '< 30s' };
 
 export default function Dashboard() {
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -40,9 +71,50 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [copiedBom, setCopiedBom] = useState<string | null>(null);
+  const [boms, setBoms] = useState<Bom[]>(fallbackBOMs);
+  const [stats, setStats] = useState<Stats>(fallbackStats);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch from API — falls back to mock data if API returns mock flag
+  const fetchBoms = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/boms');
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data = await res.json();
+      if (data.boms && data.boms.length > 0) {
+        setBoms(data.boms);
+        setStats({
+          totalSavingsMonth: data.stats?.totalSavingsMonth ?? fallbackStats.totalSavingsMonth,
+          bomsAnalyzed: data.stats?.bomsAnalyzed ?? fallbackStats.bomsAnalyzed,
+          avgSavingsPerBom: data.stats?.avgSavingsPerBom ?? fallbackStats.avgSavingsPerBom,
+          avgTimeToNotify: '< 30s',
+        });
+        setIsLive(!!data.live);
+      }
+      setLastRefresh(new Date());
+    } catch {
+      // API not connected yet — keep fallback data
+      console.log('[BOM Watch] Using demo data — API not connected');
+    } finally {
+      setRefreshing(false);
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial fetch + auto-refresh every 60s
+  useEffect(() => {
+    setIsLoading(true);
+    fetchBoms();
+    const interval = setInterval(fetchBoms, 60000);
+    return () => clearInterval(interval);
+  }, [fetchBoms]);
 
   const filteredBOMs = useMemo(() => {
-    return recentBOMs.filter(bom => {
+    return boms.filter(bom => {
       const matchesSearch = searchQuery === '' || 
         bom.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         bom.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -53,12 +125,36 @@ export default function Dashboard() {
   }, [searchQuery, statusFilter]);
 
   const statusCounts = useMemo(() => ({
-    all: recentBOMs.length,
-    analyzed: recentBOMs.filter(b => b.status === 'analyzed').length,
-    ordered: recentBOMs.filter(b => b.status === 'ordered').length,
-  }), []);
+    all: boms.length,
+    analyzed: boms.filter(b => b.status === 'analyzed').length,
+    ordered: boms.filter(b => b.status === 'ordered').length,
+  }), [boms]);
 
-  const copyBomData = useCallback((bom: typeof recentBOMs[0]) => {
+  // Export BOM data as CSV file download
+  const exportBomCSV = useCallback((bom: Bom) => {
+    const headers = ['Part Number', 'Description', 'Qty', 'McMaster', 'Grainger', 'DigiKey', 'Mouser', 'Best Vendor', 'Savings'];
+    const rows = bom.items.map(item => [
+      item.partNumber,
+      `"${item.description}"`,
+      item.qty,
+      item.mcmaster ?? '',
+      item.grainger ?? '',
+      item.digikey ?? '',
+      item.mouser ?? '',
+      item.bestVendor,
+      item.savings.toFixed(2),
+    ].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${bom.id}-${bom.name.replace(/\s+/g, '-').toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const copyBomData = useCallback((bom: Bom) => {
     const lines = bom.items.map(item => 
       `${item.partNumber}\t${item.description}\t${item.qty}\t${item.mcmaster || '-'}\t${item.grainger || '-'}\t${item.digikey || '-'}\t${item.mouser || '-'}\t${item.bestVendor}\t$${item.savings.toFixed(2)}`
     );
@@ -87,13 +183,22 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
+              <button 
+                onClick={fetchBoms} 
+                disabled={refreshing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-all duration-200 font-mono disabled:opacity-50"
+                title={lastRefresh ? `Last refreshed: ${lastRefresh.toLocaleTimeString()}` : 'Refresh data'}
+              >
+                <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
               <a href="https://app.bom.arena.com" target="_blank" rel="noopener" className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-all duration-200 font-mono">
                 Arena PLM <ArrowUpRight className="w-3 h-3" />
               </a>
-              <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                <span className="text-[10px] sm:text-[11px] font-medium text-emerald-400 font-mono hidden sm:inline">ARENA CONNECTED</span>
-                <span className="text-[10px] font-medium text-emerald-400 font-mono sm:hidden">LIVE</span>
+              <div className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full border ${isLive ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className={`text-[10px] sm:text-[11px] font-medium font-mono hidden sm:inline ${isLive ? 'text-emerald-400' : 'text-amber-400'}`}>{isLive ? 'ARENA CONNECTED' : 'DEMO MODE'}</span>
+                <span className={`text-[10px] font-medium font-mono sm:hidden ${isLive ? 'text-emerald-400' : 'text-amber-400'}`}>{isLive ? 'LIVE' : 'DEMO'}</span>
               </div>
             </div>
           </div>
@@ -101,6 +206,17 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 text-emerald-400/60 animate-spin" />
+              <p className="text-sm text-white/40 font-mono">Connecting to BOM Watch...</p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && <>
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
@@ -159,7 +275,7 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-medium text-white/80">Recent BOM Changes</h2>
-              <span className="text-[10px] font-mono text-white/20 bg-white/[0.04] px-2 py-0.5 rounded-full">{recentBOMs.length} total</span>
+              <span className="text-[10px] font-mono text-white/20 bg-white/[0.04] px-2 py-0.5 rounded-full">{boms.length} total</span>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <div className="relative">
@@ -233,16 +349,24 @@ export default function Dashboard() {
                         <Sparkles className="w-3 h-3" />
                         <span>AI-analyzed price comparison</span>
                       </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); copyBomData(bom); }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
-                      >
-                        {copiedBom === bom.id ? (
-                          <><CheckCircle2 className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Copied!</span></>
-                        ) : (
-                          <><Copy className="w-3 h-3" /><span>Copy to clipboard</span></>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); copyBomData(bom); }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
+                        >
+                          {copiedBom === bom.id ? (
+                            <><CheckCircle2 className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">Copied!</span></>
+                          ) : (
+                            <><Copy className="w-3 h-3" /><span className="hidden sm:inline">Copy</span></>
+                          )}
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); exportBomCSV(bom); }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
+                        >
+                          <Download className="w-3 h-3" /><span className="hidden sm:inline">Export CSV</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
@@ -371,8 +495,9 @@ export default function Dashboard() {
               <span className="text-white/60 font-medium">Integration ready.</span> Connect Arena PLM webhook, Slack notifications, and vendor APIs. Built on Next.js + Vercel + Claude AI.
             </p>
           </div>
-          <span className="text-[10px] font-mono text-emerald-400/30 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10 self-end sm:self-auto">v0.3.0</span>
+          <span className="text-[10px] font-mono text-emerald-400/30 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10 self-end sm:self-auto">v0.4.0</span>
         </div>
+        </>}
       </main>
 
       <footer className="border-t border-white/[0.04] mt-8 py-4">
