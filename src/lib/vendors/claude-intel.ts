@@ -25,6 +25,11 @@ export interface ClaudeIntelResult {
 }
 
 export async function claudeAnalyzePart(partNumber: string): Promise<ClaudeIntelResult> {
+  // Skip Claude pricing search when OEM Secrets is configured (it provides better data)
+  if (process.env.OEMSECRETS_API_KEY) {
+    return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: '', alternatives: [], searched: false };
+  }
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: '', alternatives: [], searched: false };
