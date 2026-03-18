@@ -487,7 +487,7 @@ export default function Dashboard() {
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Grainger</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">DigiKey</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Mouser</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-purple-400/50 uppercase tracking-wider">🤖 AI</th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-purple-400/50 uppercase tracking-wider">AI</th>
                             <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Best</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Saved</th>
                           </tr>
@@ -533,7 +533,7 @@ export default function Dashboard() {
                                   {item.claudeIntel && (item.claudeIntel.bestPrice !== null || item.claudeIntel.insight) && (
                                     <div className="mt-1.5 space-y-1">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="text-[9px] text-purple-400/70">🤖</span>
+                                        <Sparkles className="w-2.5 h-2.5 text-purple-400/70" />
                                         {item.claudeIntel.bestPrice !== null && item.claudeIntel.sourceUrl ? (
                                           <a href={item.claudeIntel.sourceUrl} target="_blank" rel="noopener" className="text-[9px] font-mono text-purple-400/60 hover:text-purple-400 transition-colors">
                                             {item.claudeIntel.bestSource} ${item.claudeIntel.bestPrice.toFixed(2)}
