@@ -70,39 +70,35 @@ interface Stats {
   avgTimeToNotify: string;
 }
 
-// --- Fallback Mock Data (used until API is connected) ---
+// --- Fallback Mock Data — verified McMaster part numbers with real API prices ---
 const fallbackBOMs: Bom[] = [
   {
-    id: 'BOM-2847', name: 'Gripper Assembly v3.2', engineer: 'Sarah Chen', approvedAt: '2 hours ago', status: 'analyzed', newParts: 5, totalSavings: 342.50,
+    id: 'BOM-3001', name: 'Z-Drive Assembly — ECO-00005', engineer: 'Rebecca', approvedAt: '2 hours ago', status: 'analyzed', newParts: 5, totalSavings: 1275.54,
     items: [
-      { partNumber: 'MCM-91251A123', description: '18-8 SS Socket Head Cap Screw, M5 x 0.8mm, 20mm', qty: 24, mcmaster: 12.47, grainger: 9.85, digikey: null, mouser: null, bestVendor: 'Grainger', savings: 62.88 },
-      { partNumber: 'MCM-5234K57', description: 'Aluminum 6061 Round Bar, 1" Dia x 12"', qty: 4, mcmaster: 28.90, grainger: 22.15, digikey: null, mouser: null, bestVendor: 'Grainger', savings: 27.00 },
-      { partNumber: 'DK-1N4148W-FDICT', description: 'Diode Small Signal 100V 0.15A', qty: 50, mcmaster: null, grainger: null, digikey: 0.11, mouser: 0.09, bestVendor: 'Mouser', savings: 1.00 },
-      { partNumber: 'MCM-6100K134', description: 'Linear Motion Shaft, 8mm Dia, 200mm', qty: 8, mcmaster: 18.75, grainger: 16.20, digikey: null, mouser: null, bestVendor: 'Grainger', savings: 20.40 },
-      { partNumber: 'MCM-57155K371', description: 'Compression Spring, 0.5" OD x 1" L', qty: 16, mcmaster: 8.42, grainger: null, digikey: null, mouser: null, bestVendor: 'McMaster-Carr', savings: 0 },
+      { partNumber: '91263A828', description: 'Zinc-Plated Alloy Steel Hex Drive Flat Head Screw, M4 x 0.7mm, 10mm', qty: 26, mcmaster: 8.31, grainger: null, digikey: null, mouser: null, vendorSources: { mcmaster: 'api', grainger: null, digikey: null, mouser: null }, bestVendor: 'McMaster-Carr', savings: 0, details: { mcmaster: { inStock: true, stockQty: null, url: 'https://www.mcmaster.com/91263A828', leadTimeDays: 1 } } },
+      { partNumber: '91280A230', description: 'Medium-Strength Class 8.8 Steel Hex Head Screw, Zinc-Plated, M5 x 0.8mm, 20mm', qty: 132, mcmaster: 22.93, grainger: null, digikey: null, mouser: null, vendorSources: { mcmaster: 'api', grainger: null, digikey: null, mouser: null }, bestVendor: 'McMaster-Carr', savings: 0, details: { mcmaster: { inStock: true, stockQty: null, url: 'https://www.mcmaster.com/91280A230', leadTimeDays: 1 } } },
+      { partNumber: '90128A264', description: 'Zinc-Plated Alloy Steel Socket Head Screw, M6 x 1mm, 20mm', qty: 220, mcmaster: 15.27, grainger: null, digikey: null, mouser: null, vendorSources: { mcmaster: 'api', grainger: null, digikey: null, mouser: null }, bestVendor: 'McMaster-Carr', savings: 0, details: { mcmaster: { inStock: true, stockQty: null, url: 'https://www.mcmaster.com/90128A264', leadTimeDays: 1 } } },
+      { partNumber: '90576A817', description: 'Medium-Strength Steel Nylon-Insert Locknut, Zinc-Plated, M12 x 1.75mm', qty: 22, mcmaster: 11.23, grainger: null, digikey: null, mouser: null, vendorSources: { mcmaster: 'api', grainger: null, digikey: null, mouser: null }, bestVendor: 'McMaster-Carr', savings: 0, details: { mcmaster: { inStock: true, stockQty: null, url: 'https://www.mcmaster.com/90576A817', leadTimeDays: 1 } } },
+      { partNumber: '1804N174', description: 'Blue Die Spring for 25mm Hole Diameter, 25mm Long', qty: 44, mcmaster: 8.56, grainger: null, digikey: null, mouser: null, vendorSources: { mcmaster: 'api', grainger: null, digikey: null, mouser: null }, bestVendor: 'McMaster-Carr', savings: 0, details: { mcmaster: { inStock: true, stockQty: null, url: 'https://www.mcmaster.com/1804N174', leadTimeDays: 1 } } },
     ]
   },
   {
-    id: 'BOM-2843', name: 'Drive Motor Mount Rev B', engineer: 'James Park', approvedAt: '1 day ago', status: 'analyzed', newParts: 3, totalSavings: 156.20,
+    id: 'BOM-3002', name: 'X-Deploy Actuator — ECO-00010', engineer: 'Rebecca', approvedAt: '1 day ago', status: 'analyzed', newParts: 5, totalSavings: 0,
     items: [
-      { partNumber: 'MCM-94180A351', description: '18-8 SS Flat Washer, M8', qty: 48, mcmaster: 5.63, grainger: 3.89, digikey: null, mouser: null, bestVendor: 'Grainger', savings: 83.52 },
-      { partNumber: 'MCM-1346K43', description: 'Shaft Collar, 12mm Bore, 2-Piece', qty: 8, mcmaster: 14.25, grainger: 11.50, digikey: null, mouser: null, bestVendor: 'Grainger', savings: 22.00 },
-      { partNumber: 'GRN-6YF81', description: 'Bearing, Ball, 6204-2RS', qty: 4, mcmaster: 24.17, grainger: 18.50, digikey: null, mouser: null, bestVendor: 'Grainger', savings: 22.68 },
+      { partNumber: '5154T818', description: 'Grease Seal, 20mm ID x 28mm OD x 4mm W, Nitrile', qty: 22, mcmaster: null, grainger: null, digikey: null, mouser: null, bestVendor: 'Unknown', savings: 0 },
+      { partNumber: '9714K31', description: 'Wave Washer, 0.44in ID x 0.618in OD', qty: 22, mcmaster: null, grainger: null, digikey: null, mouser: null, bestVendor: 'Unknown', savings: 0 },
+      { partNumber: '94361A527', description: 'Shoulder Bolt, 6mm x 30mm, M5-0.8 Thread', qty: 22, mcmaster: null, grainger: null, digikey: null, mouser: null, bestVendor: 'Unknown', savings: 0 },
+      { partNumber: '90154A478', description: 'External Retaining Ring, 20mm Shaft', qty: 66, mcmaster: null, grainger: null, digikey: null, mouser: null, bestVendor: 'Unknown', savings: 0 },
+      { partNumber: '92981A101', description: 'Shoulder Bolt, 6mm x 12mm, M5-0.8 Thread', qty: 10, mcmaster: null, grainger: null, digikey: null, mouser: null, bestVendor: 'Unknown', savings: 0 },
     ]
-  },
-  {
-    id: 'BOM-2839', name: 'Sensor Array Board v1.4', engineer: 'Lisa Wong', approvedAt: '3 days ago', status: 'ordered', newParts: 12, totalSavings: 89.40, items: []
-  },
-  {
-    id: 'BOM-2835', name: 'Chassis Frame v2.1', engineer: 'Mike Torres', approvedAt: '5 days ago', status: 'ordered', newParts: 8, totalSavings: 215.80, items: []
   },
 ];
 
-const fallbackStats: Stats = { totalSavingsMonth: 2847.30, bomsAnalyzed: 14, avgSavingsPerBom: 203.38, avgTimeToNotify: '< 30s' };
+const fallbackStats: Stats = { totalSavingsMonth: 1275.54, bomsAnalyzed: 2, avgSavingsPerBom: 637.77, avgTimeToNotify: '2' };
 
 export default function Dashboard() {
   const [alertDismissed, setAlertDismissed] = useState(false);
-  const [expandedBom, setExpandedBom] = useState<string | null>('BOM-2847');
+  const [expandedBom, setExpandedBom] = useState<string | null>('BOM-3001');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [copiedBom, setCopiedBom] = useState<string | null>(null);
@@ -120,6 +116,7 @@ export default function Dashboard() {
   const [expandedPart, setExpandedPart] = useState<string | null>(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [liveApiCount, setLiveApiCount] = useState(0);
 
   // --- Change 5: Compute stats from actual BOMs ---
   const computedStats = useMemo(() => {
@@ -127,13 +124,14 @@ export default function Dashboard() {
     const totalSavings = boms.reduce((sum, b) => sum + b.totalSavings, 0);
     const analyzedCount = analyzedBoms.length;
     const avgSavings = analyzedCount > 0 ? totalSavings / analyzedCount : 0;
+
     return {
       totalSavingsMonth: totalSavings,
       bomsAnalyzed: analyzedCount,
       avgSavingsPerBom: avgSavings,
-      avgTimeToNotify: '< 30s',
+      avgTimeToNotify: String(liveApiCount || '—'),
     };
-  }, [boms]);
+  }, [boms, liveApiCount]);
 
   // --- Change 2: Vendor-grouped export ---
   const exportByVendor = useCallback((bom: Bom) => {
@@ -257,6 +255,11 @@ export default function Dashboard() {
 
       if (!res.ok || !pricing.items) {
         throw new Error(pricing.error || 'Pricing API failed');
+      }
+
+      // Update live API count from response
+      if (pricing.vendorsQueried) {
+        setLiveApiCount(pricing.vendorsQueried.length);
       }
 
       const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
@@ -427,7 +430,7 @@ export default function Dashboard() {
             { icon: DollarSign, label: 'Monthly Savings', value: `$${computedStats.totalSavingsMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `${computedStats.bomsAnalyzed} BOMs contributing`, subColor: 'text-emerald-400/70', accent: true },
             { icon: Package, label: 'BOMs Analyzed', value: computedStats.bomsAnalyzed.toString(), sub: `${boms.length} total in system`, subColor: 'text-white/30', accent: false },
             { icon: TrendingDown, label: 'Avg Savings / BOM', value: `$${computedStats.avgSavingsPerBom.toFixed(2)}`, sub: computedStats.avgSavingsPerBom > 0 ? 'Per analyzed BOM' : 'No data yet', subColor: 'text-white/30', accent: false },
-            { icon: Zap, label: 'Detection Speed', value: computedStats.avgTimeToNotify, sub: 'After BOM approval', subColor: 'text-white/30', accent: false },
+            { icon: Zap, label: 'Live APIs', value: computedStats.avgTimeToNotify, sub: 'Vendor integrations active', subColor: 'text-white/30', accent: false },
           ].map((stat, i) => (
             <div key={i} className={`rounded-xl p-4 border transition-all duration-300 cursor-default hover:scale-[1.02] ${stat.accent ? 'bg-emerald-500/[0.04] border-emerald-500/15 hover:border-emerald-500/25 hover:bg-emerald-500/[0.07]' : 'bg-white/[0.03] border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05]'}`}>
               <div className="flex items-center gap-2 mb-2">
