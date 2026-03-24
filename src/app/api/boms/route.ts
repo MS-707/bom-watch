@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { listBomAnalyses } from '@/lib/db/bom-store';
+import { initSchema } from '@/lib/db/schema';
 
 /**
  * BOM Analysis API
- * 
+ *
  * GET /api/boms — List analyzed BOMs with pricing data
  * Query params: ?status=analyzed|ordered&limit=20&offset=0
- * 
- * For hackathon: returns mock data
- * For production: reads from Vercel Postgres
+ *
+ * Reads from Neon Postgres when DATABASE_URL is configured.
+ * Falls back to mock data when database is not available.
  */
 
-// Mock data — same structure the dashboard expects
-// In production, this comes from the database populated by the webhook handler
+// Mock data for when database is not configured
 const mockBoms = [
   {
     id: 'BOM-2847',
@@ -71,15 +72,50 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(searchParams.get('limit') || '20');
   const offset = parseInt(searchParams.get('offset') || '0');
 
-  let results = mockBoms;
+  const hasDb = !!process.env.DATABASE_URL;
+  let results: Array<{
+    id: string;
+    name: string;
+    engineer: string;
+    approvedAt: string;
+    status: string;
+    newParts: number;
+    totalSavings: number;
+    items: unknown[];
+  }>;
+
+  if (hasDb) {
+    try {
+      await initSchema();
+      const stored = await listBomAnalyses(limit + offset);
+      results = stored.map(b => ({
+        id: b.id,
+        name: b.name,
+        engineer: b.engineer,
+        approvedAt: b.approvedAt,
+        status: b.status,
+        newParts: Array.isArray(b.items) ? b.items.length : 0,
+        totalSavings: b.totalSavings,
+        items: b.items,
+      }));
+
+      // If database is empty, seed with mock data so the UI isn't blank
+      if (results.length === 0) {
+        results = mockBoms;
+      }
+    } catch (err) {
+      console.error('[BOMs API] Database error, falling back to mock:', err);
+      results = mockBoms;
+    }
+  } else {
+    results = mockBoms;
+  }
 
   if (status && status !== 'all') {
     results = results.filter(b => b.status === status);
   }
 
   const paginated = results.slice(offset, offset + limit);
-
-  // TODO: Set live: true when connected to real Arena PLM data
   const isLive = !!process.env.ARENA_API_KEY;
 
   return NextResponse.json({
@@ -91,7 +127,9 @@ export async function GET(req: NextRequest) {
     stats: {
       totalSavingsMonth: parseFloat(results.reduce((sum, b) => sum + b.totalSavings, 0).toFixed(2)),
       bomsAnalyzed: results.length,
-      avgSavingsPerBom: parseFloat((results.reduce((sum, b) => sum + b.totalSavings, 0) / results.length).toFixed(2)),
+      avgSavingsPerBom: results.length > 0
+        ? parseFloat((results.reduce((sum, b) => sum + b.totalSavings, 0) / results.length).toFixed(2))
+        : 0,
     }
   });
 }

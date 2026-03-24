@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { priceParts } from '@/lib/vendors';
 import type { PricingRequest } from '@/lib/vendors';
+import { saveBomAnalysis, savePriceCheck } from '@/lib/db/bom-store';
+import { initSchema } from '@/lib/db/schema';
 
 // Allow up to 60 seconds for vendor API + Claude AI web search queries
 export const maxDuration = 60;
@@ -75,6 +77,41 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await priceParts({ items: validItems });
+
+    // Persist to database if configured (best-effort)
+    if (process.env.DATABASE_URL) {
+      try {
+        await initSchema();
+        const bomId = `MAN-${Date.now()}`;
+        await saveBomAnalysis({
+          id: bomId,
+          name: 'Manual BOM',
+          source: 'manual',
+          status: 'analyzed',
+          totalSavings: result.totalSavings,
+          items: result.items,
+          vendorsQueried: result.vendorsQueried,
+          mode: result.mode,
+        });
+
+        // Save individual price history entries
+        for (const item of result.items) {
+          const vendors = [
+            { name: 'McMaster-Carr', price: item.vendors.mcmaster, source: item.vendorSources?.mcmaster },
+            { name: 'Grainger', price: item.vendors.grainger, source: item.vendorSources?.grainger },
+            { name: 'DigiKey', price: item.vendors.digikey, source: item.vendorSources?.digikey },
+            { name: 'Mouser', price: item.vendors.mouser, source: item.vendorSources?.mouser },
+          ];
+          for (const v of vendors) {
+            if (v.price !== null) {
+              await savePriceCheck(item.partNumber, v.name, v.price, v.source || 'unknown');
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.error('[Pricing API] Database save failed (non-fatal):', dbErr);
+      }
+    }
 
     return NextResponse.json(result);
   } catch (error) {
