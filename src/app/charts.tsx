@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from 'next/dynamic';
-import { BarChart3, TrendingUp } from 'lucide-react';
+import { Cell } from 'recharts';
 
 const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.ResponsiveContainer), { ssr: false });
 const AreaChart = dynamic(() => import('recharts').then(m => m.AreaChart), { ssr: false });
@@ -12,7 +12,6 @@ const CartesianGrid = dynamic(() => import('recharts').then(m => m.CartesianGrid
 const Tooltip = dynamic(() => import('recharts').then(m => m.Tooltip), { ssr: false });
 const PieChart = dynamic(() => import('recharts').then(m => m.PieChart), { ssr: false });
 const Pie = dynamic(() => import('recharts').then(m => m.Pie), { ssr: false });
-const Cell = dynamic(() => import('recharts').then(m => m.Cell), { ssr: false });
 
 const monthlySavings = [
   { month: 'Oct', savings: 890 },
