@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, ChevronUp, Bell, BarChart3, Zap, Search, Filter, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Wifi, WifiOff, Plus } from 'lucide-react';
+import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, Bell, BarChart3, Zap, Search, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Plus } from 'lucide-react';
 import { SavingsChart, VendorChart } from './charts';
 import { ManualBomDrawer } from './manual-bom';
 import { DataToggle, type DataSource } from './data-toggle';
@@ -29,6 +29,8 @@ interface ClaudeIntel {
   alternatives: Array<{ distributor: string; price: number; url: string; note?: string }>;
 }
 
+type PriceSource = 'api' | 'estimated' | 'ai' | null;
+
 interface BomItem {
   partNumber: string;
   description: string;
@@ -37,6 +39,12 @@ interface BomItem {
   grainger: number | null;
   digikey: number | null;
   mouser: number | null;
+  vendorSources?: {
+    mcmaster: PriceSource;
+    grainger: PriceSource;
+    digikey: PriceSource;
+    mouser: PriceSource;
+  };
   bestVendor: string;
   savings: number;
   details?: { [vendor: string]: VendorDetail };
@@ -163,7 +171,7 @@ export default function Dashboard() {
       const newId = `MAN-${(1000 + manualBomCounter).toString()}`;
       setManualBomCounter(prev => prev + 1);
 
-      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail }; marketIntel?: MarketIntel; claudeIntel?: ClaudeIntel }) => ({
+      const analyzedItems: BomItem[] = pricing.items.map((item: { partNumber: string; description: string; qty: number; vendors: { mcmaster: number | null; grainger: number | null; digikey: number | null; mouser: number | null }; vendorSources?: { mcmaster: PriceSource; grainger: PriceSource; digikey: PriceSource; mouser: PriceSource }; bestVendor: string; savings: number; details?: { [vendor: string]: VendorDetail }; marketIntel?: MarketIntel; claudeIntel?: ClaudeIntel }) => ({
         partNumber: item.partNumber,
         description: item.description || `Part ${item.partNumber}`,
         qty: item.qty,
@@ -171,6 +179,7 @@ export default function Dashboard() {
         grainger: item.vendors.grainger,
         digikey: item.vendors.digikey,
         mouser: item.vendors.mouser,
+        vendorSources: item.vendorSources,
         bestVendor: item.bestVendor,
         savings: item.savings,
         details: item.details,
@@ -484,11 +493,11 @@ export default function Dashboard() {
                           <tr className="border-b border-white/[0.06]">
                             <th className="px-5 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Part</th>
                             <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Qty</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">McMaster</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Grainger</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">DigiKey</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Mouser</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-purple-400/50 uppercase tracking-wider">AI</th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">McMaster <span className="text-emerald-400/60 text-[8px] normal-case">api</span></th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Grainger <span className="text-amber-400/60 text-[8px] normal-case">soon</span></th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">DigiKey <span className="text-emerald-400/60 text-[8px] normal-case">api</span></th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Mouser <span className="text-emerald-400/60 text-[8px] normal-case">api</span></th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-purple-400/50 uppercase tracking-wider">Market Intel</th>
                             <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Best</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Saved</th>
                           </tr>
@@ -498,9 +507,14 @@ export default function Dashboard() {
                             const prices = [item.mcmaster, item.grainger, item.digikey, item.mouser].filter((p): p is number => p !== null && p !== undefined);
                             const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
                             const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
-                            const PriceCell = ({ val }: { val: number | null }) => (
+                            const PriceCell = ({ val, source }: { val: number | null; source?: PriceSource }) => (
                               <td className={`px-3 py-3 text-right text-xs font-mono ${val === minPrice && prices.length > 1 ? 'text-emerald-400 font-medium bg-emerald-500/[0.06]' : val === maxPrice && val !== minPrice ? 'text-red-400/50' : val ? 'text-white/40' : 'text-white/10'}`}>
-                                {val ? `$${val.toFixed(2)}` : '—'}
+                                {val ? (
+                                  <span className="flex items-center justify-end gap-1.5">
+                                    {source === 'estimated' && <span className="text-[7px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400/60 uppercase">est</span>}
+                                    ${val.toFixed(2)}
+                                  </span>
+                                ) : '—'}
                               </td>
                             );
                             const vendorLinks = item.details ? Object.entries(item.details).filter(([, d]) => d.url) : [];
@@ -544,11 +558,11 @@ export default function Dashboard() {
                                       {(allSources.length > 0 || item.claudeIntel?.insight) && (
                                         <button
                                           onClick={(e) => { e.stopPropagation(); setExpandedPart(isPartExpanded ? null : partKey); }}
-                                          className="mt-2 flex items-center gap-1.5 text-[9px] font-mono text-purple-400/50 hover:text-purple-400 transition-colors cursor-pointer"
+                                          className="mt-2 flex items-center gap-1.5 text-[11px] font-mono text-purple-400/70 hover:text-purple-400 transition-colors cursor-pointer"
                                         >
-                                          <Sparkles className="w-2.5 h-2.5" />
+                                          <Sparkles className="w-3 h-3" />
                                           <span>{vendorCount} vendor{vendorCount !== 1 ? 's' : ''} searched</span>
-                                          <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isPartExpanded ? 'rotate-180' : ''}`} />
+                                          <ChevronDown className={`w-3 h-3 transition-transform ${isPartExpanded ? 'rotate-180' : ''}`} />
                                         </button>
                                       )}
                                       {isPartExpanded && item.claudeIntel && (
@@ -584,10 +598,10 @@ export default function Dashboard() {
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 text-center text-xs text-white/40 font-mono">{item.qty}</td>
-                                <PriceCell val={item.mcmaster} />
-                                <PriceCell val={item.grainger} />
-                                <PriceCell val={item.digikey} />
-                                <PriceCell val={item.mouser} />
+                                <PriceCell val={item.mcmaster} source={item.vendorSources?.mcmaster} />
+                                <PriceCell val={item.grainger} source={item.vendorSources?.grainger} />
+                                <PriceCell val={item.digikey} source={item.vendorSources?.digikey} />
+                                <PriceCell val={item.mouser} source={item.vendorSources?.mouser} />
                                 <td className={`px-3 py-3 text-right text-xs font-mono ${item.claudeIntel?.bestPrice ? 'text-purple-400 font-medium bg-purple-500/[0.06]' : 'text-white/10'}`}>
                                   {item.claudeIntel?.bestPrice ? (
                                     item.claudeIntel.sourceUrl ? (
