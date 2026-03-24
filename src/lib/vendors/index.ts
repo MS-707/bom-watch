@@ -6,20 +6,22 @@
  * Architecture:
  *   1. OEM Secrets is the PRIMARY source — one API call returns real-time
  *      pricing from 39+ distributors (DigiKey, Mouser, Arrow, Newark, etc.)
- *   2. Falls back to individual vendor clients when OEM Secrets isn't configured
- *   3. McMaster-Carr has no API — pricing is always simulated
+ *   2. McMaster-Carr API provides real pricing for mechanical parts
+ *   3. Falls back to individual vendor clients when OEM Secrets isn't configured
  *   4. Market intel (Brave) and Claude AI run in parallel as supplementary sources
  */
 
 import { DigiKeyClient } from './digikey';
 import { MouserClient } from './mouser';
 import { GraingerClient } from './grainger';
+import { McMasterClient, isMcMasterConfigured } from './mcmaster';
 import { searchMarketPrices } from './market-intel';
 import { claudeAnalyzeParts } from './claude-intel';
 import { isOemSecretsConfigured, searchOemSecretsBatch } from './oemsecrets';
 import type { VendorClient, PricingRequest, PricingResponse, PricedItem } from './types';
 
-// Singleton clients (fallback when OEM Secrets isn't configured)
+// Singleton clients
+const mcmaster = new McMasterClient();
 const clients: VendorClient[] = [
   new DigiKeyClient(),
   new MouserClient(),
@@ -47,7 +49,7 @@ function detectVendorType(partNumber: string): 'mechanical' | 'electronic' | 'un
   return 'unknown';
 }
 
-// Simulated McMaster pricing (no API exists)
+// Simulated McMaster pricing (fallback when API not configured)
 function simulateMcMasterPrice(partNumber: string): number | null {
   const type = detectVendorType(partNumber);
   if (type === 'electronic') return null;
@@ -63,21 +65,44 @@ function simulateMcMasterPrice(partNumber: string): number | null {
 
 export async function priceParts(request: PricingRequest): Promise<PricingResponse> {
   const useOemSecrets = isOemSecretsConfigured();
-  const configuredVendors = useOemSecrets
-    ? ['OEM Secrets (39+ distributors)']
-    : clients.filter(c => c.isConfigured()).map(c => c.name);
-  const hasLiveVendors = useOemSecrets || clients.some(c => c.name !== 'Grainger' && c.isConfigured());
+  const useMcMaster = isMcMasterConfigured();
+  const configuredVendors = [
+    ...(useMcMaster ? ['McMaster-Carr API'] : []),
+    ...(useOemSecrets ? ['OEM Secrets (39+ distributors)'] : clients.filter(c => c.isConfigured()).map(c => c.name)),
+  ];
+  const hasLiveVendors = useMcMaster || useOemSecrets || clients.some(c => c.name !== 'Grainger' && c.isConfigured());
 
   const partNumbers = request.items.map(i => i.partNumber);
 
-  // Launch all data sources in parallel
+  // Step 1: Fetch McMaster product data first (gives us descriptions for Claude)
+  const mcmasterDescriptions = new Map<string, string>();
+  if (useMcMaster) {
+    await Promise.allSettled(
+      request.items.map(async (item) => {
+        if (detectVendorType(item.partNumber) !== 'electronic') {
+          try {
+            const result = await mcmaster.searchByPartNumber(item.partNumber, item.qty);
+            if (result) {
+              mcmasterDescriptions.set(item.partNumber, result.description);
+              // Cache the price so we don't re-fetch below
+              (item as Record<string, unknown>)._mcmasterResult = result;
+            }
+          } catch { /* handled below */ }
+        }
+      })
+    );
+  }
+
+  // Step 2: Launch remaining data sources in parallel (with descriptions available for Claude)
   const oemSecretsPromise = useOemSecrets
     ? searchOemSecretsBatch(partNumbers, request.items[0]?.qty || 1)
     : Promise.resolve(new Map());
 
-  // Always run Claude AI in parallel — it's the fallback for the AI column
-  // when OEM Secrets is unavailable or returns no data
-  const claudeIntelPromise: Promise<Map<string, unknown>> = claudeAnalyzeParts(partNumbers) as Promise<Map<string, unknown>>;
+  // Claude AI gets McMaster descriptions for better cross-referencing
+  const claudeIntelPromise: Promise<Map<string, unknown>> = claudeAnalyzeParts(
+    partNumbers,
+    mcmasterDescriptions.size > 0 ? mcmasterDescriptions : undefined
+  ) as Promise<Map<string, unknown>>;
 
   // Market intel via Brave search (skip when OEM Secrets is configured)
   const marketIntelPromise: Promise<Map<string, unknown>> = useOemSecrets
@@ -92,11 +117,38 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
       const partType = detectVendorType(item.partNumber);
       const oem = oemResults.get(item.partNumber);
 
-      let mcmasterPrice: number | null = simulateMcMasterPrice(item.partNumber);
+      let mcmasterPrice: number | null = null;
       let graingerPrice: number | null = null;
       let digikeyPrice: number | null = null;
       let mouserPrice: number | null = null;
       const details: PricedItem['details'] = {};
+
+      // McMaster-Carr: use cached result from Step 1, or fetch if not cached
+      if (useMcMaster && partType !== 'electronic') {
+        try {
+          const mcResult = (item as Record<string, unknown>)._mcmasterResult as Awaited<ReturnType<typeof mcmaster.searchByPartNumber>> | undefined
+            || await mcmaster.searchByPartNumber(item.partNumber, item.qty);
+          if (mcResult) {
+            mcmasterPrice = mcResult.unitPrice;
+            details.mcmaster = {
+              inStock: mcResult.inStock,
+              stockQty: mcResult.stockQty,
+              url: mcResult.url,
+              leadTimeDays: mcResult.leadTimeDays,
+            };
+            if (!item.description && mcResult.description) {
+              item.description = mcResult.description;
+            }
+          }
+        } catch (err) {
+          console.error(`[McMaster] Price lookup failed for ${item.partNumber}:`, err);
+        }
+      }
+
+      // Fallback to simulated McMaster price if API didn't return data
+      if (mcmasterPrice === null) {
+        mcmasterPrice = simulateMcMasterPrice(item.partNumber);
+      }
 
       if (oem && oem.found) {
         // --- OEM Secrets provided real data ---
@@ -260,6 +312,6 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
   };
 }
 
-export { DigiKeyClient, MouserClient, GraingerClient };
+export { DigiKeyClient, MouserClient, GraingerClient, McMasterClient };
 export { searchMarketPrices } from './market-intel';
 export type { VendorClient, PricingRequest, PricingResponse, PricedItem };
