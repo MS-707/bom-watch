@@ -224,6 +224,13 @@ export function ManualBomDrawer({ isOpen, onClose, onSubmit, isAnalyzing }: Manu
             )}
           </div>
 
+          {/* 50-part limit warning */}
+          {itemCount > 50 && (
+            <div className="mx-5 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-mono">
+              Maximum 50 parts per analysis. Only the first 50 will be processed.
+            </div>
+          )}
+
           {/* Footer */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] bg-white/[0.01]">
             <button

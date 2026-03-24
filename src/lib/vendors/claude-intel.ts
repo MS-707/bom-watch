@@ -162,12 +162,18 @@ export async function claudeAnalyzePart(partNumber: string, description?: string
 
     const parsed = JSON.parse(jsonStr);
 
+    // Ensure insight always starts with "AI web search:" disclaimer
+    let insight = parsed.insight || '';
+    if (insight && !insight.startsWith('AI web search:')) {
+      insight = `AI web search: ${insight}`;
+    }
+
     return {
       partNumber,
       bestPrice: typeof parsed.bestPrice === 'number' ? parsed.bestPrice : null,
       bestSource: parsed.bestSource || null,
       sourceUrl: parsed.sourceUrl || null,
-      insight: parsed.insight || '',
+      insight,
       alternatives: Array.isArray(parsed.alternatives) ? parsed.alternatives.slice(0, 3).map((a: { distributor?: string; price?: number; url?: string; note?: string }) => ({
         distributor: a.distributor || 'Unknown',
         price: typeof a.price === 'number' ? a.price : 0,

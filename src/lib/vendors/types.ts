@@ -93,6 +93,10 @@ export interface PricedItem {
   };
   marketIntel?: MarketIntel;
   claudeIntel?: ClaudeIntel;
+  riskFlags?: Array<{
+    type: 'single_source' | 'out_of_stock' | 'long_lead_time' | 'price_unverified';
+    message: string;
+  }>;
 }
 
 export interface PricingResponse {

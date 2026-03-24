@@ -48,11 +48,16 @@ interface ArenaWebhookPayload {
 export async function POST(req: NextRequest) {
   try {
     // Verify webhook authentication
-    if (ARENA_WEBHOOK_SECRET) {
-      const authHeader = req.headers.get('authorization');
-      if (authHeader !== `Bearer ${ARENA_WEBHOOK_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    if (!ARENA_WEBHOOK_SECRET) {
+      return NextResponse.json(
+        { error: 'Webhook not configured' },
+        { status: 503 }
+      );
+    }
+
+    const authHeader = req.headers.get('authorization');
+    if (authHeader !== `Bearer ${ARENA_WEBHOOK_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const payload: ArenaWebhookPayload = await req.json();

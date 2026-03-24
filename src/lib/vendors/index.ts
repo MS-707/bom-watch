@@ -247,6 +247,45 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
         details,
       };
 
+      // Populate risk flags
+      const riskFlags: PricedItem['riskFlags'] = [];
+
+      // single_source: only 1 vendor has a non-null price
+      const vendorsWithPrice = [mcmasterPrice, graingerPrice, digikeyPrice, mouserPrice].filter(p => p !== null).length;
+      if (vendorsWithPrice === 1) {
+        riskFlags.push({ type: 'single_source', message: 'Only one vendor has pricing for this part' });
+      }
+
+      // out_of_stock: no vendor in details has inStock: true
+      const detailEntries = Object.values(details);
+      if (detailEntries.length > 0 && !detailEntries.some(d => d.inStock)) {
+        riskFlags.push({ type: 'out_of_stock', message: 'No vendors report this part as in stock' });
+      }
+
+      // long_lead_time: best vendor's lead time > 14 days
+      const bestVendorKey = bestVendor.toLowerCase().replace('-', '').replace(' ', '');
+      const bestDetail = Object.entries(details).find(([key]) => key.toLowerCase().replace('-', '').replace(' ', '') === bestVendorKey);
+      if (bestDetail && bestDetail[1].leadTimeDays !== null && bestDetail[1].leadTimeDays > 14) {
+        riskFlags.push({ type: 'long_lead_time', message: `Best vendor lead time is ${bestDetail[1].leadTimeDays} days` });
+      }
+
+      // price_unverified: vendorSources for the best vendor is 'estimated' or 'ai'
+      const vendorSourceMap: Record<string, PriceSource> = {
+        'mcmaster-carr': mcmasterSource,
+        'mcmaster': mcmasterSource,
+        'grainger': graingerSource,
+        'digikey': digikeySource,
+        'mouser': mouserSource,
+      };
+      const bestVendorSource = vendorSourceMap[bestVendor.toLowerCase()] ?? vendorSourceMap[bestVendor.toLowerCase().replace('-carr', '')] ?? null;
+      if (bestVendorSource === 'estimated' || bestVendorSource === 'ai') {
+        riskFlags.push({ type: 'price_unverified', message: `Best vendor price is ${bestVendorSource}, not from a live API` });
+      }
+
+      if (riskFlags.length > 0) {
+        pricedItem.riskFlags = riskFlags;
+      }
+
       // If OEM Secrets found data, attach it as claudeIntel (powers the AI column)
       if (oem && oem.found && oem.claudeIntel.bestPrice !== null) {
         pricedItem.claudeIntel = oem.claudeIntel;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, Bell, BarChart3, Zap, Search, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Plus } from 'lucide-react';
+import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, Bell, BarChart3, Zap, Search, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Plus, ShoppingCart, ClipboardList } from 'lucide-react';
 import { SavingsChart, VendorChart } from './charts';
 import { ManualBomDrawer } from './manual-bom';
 import { DataToggle, type DataSource } from './data-toggle';
@@ -118,6 +118,97 @@ export default function Dashboard() {
   const [dataSource, setDataSource] = useState<DataSource>('demo');
   const [manualBomCounter, setManualBomCounter] = useState(0);
   const [expandedPart, setExpandedPart] = useState<string | null>(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // --- Change 5: Compute stats from actual BOMs ---
+  const computedStats = useMemo(() => {
+    const analyzedBoms = boms.filter(b => b.status === 'analyzed' || b.status === 'manual');
+    const totalSavings = boms.reduce((sum, b) => sum + b.totalSavings, 0);
+    const analyzedCount = analyzedBoms.length;
+    const avgSavings = analyzedCount > 0 ? totalSavings / analyzedCount : 0;
+    return {
+      totalSavingsMonth: totalSavings,
+      bomsAnalyzed: analyzedCount,
+      avgSavingsPerBom: avgSavings,
+      avgTimeToNotify: '< 30s',
+    };
+  }, [boms]);
+
+  // --- Change 2: Vendor-grouped export ---
+  const exportByVendor = useCallback((bom: Bom) => {
+    // Group items by bestVendor
+    const groups: Record<string, BomItem[]> = {};
+    for (const item of bom.items) {
+      const vendor = item.bestVendor;
+      if (!groups[vendor]) groups[vendor] = [];
+      groups[vendor].push(item);
+    }
+
+    const vendorKey = (vendor: string): 'mcmaster' | 'grainger' | 'digikey' | 'mouser' => {
+      const map: Record<string, 'mcmaster' | 'grainger' | 'digikey' | 'mouser'> = {
+        'McMaster-Carr': 'mcmaster', 'Grainger': 'grainger', 'DigiKey': 'digikey', 'Mouser': 'mouser',
+      };
+      return map[vendor] || 'mcmaster';
+    };
+
+    let output = `VENDOR-GROUPED ORDER — ${bom.name} (${bom.id})\n${'='.repeat(60)}\n\n`;
+
+    for (const [vendor, items] of Object.entries(groups)) {
+      output += `▸ ${vendor}\n${'-'.repeat(40)}\n`;
+      let subtotal = 0;
+      for (const item of items) {
+        const key = vendorKey(vendor);
+        const unitPrice = item[key] ?? 0;
+        const lineTotal = unitPrice * item.qty;
+        subtotal += lineTotal;
+        output += `  ${item.partNumber}  ${item.description}\n`;
+        output += `    Qty: ${item.qty}  ×  $${unitPrice.toFixed(2)}  =  $${lineTotal.toFixed(2)}\n`;
+        const detail = item.details?.[key];
+        if (detail?.url) {
+          output += `    URL: ${detail.url}\n`;
+        }
+      }
+      output += `  ${'─'.repeat(30)}\n`;
+      output += `  Subtotal: $${subtotal.toFixed(2)}\n\n`;
+    }
+
+    output += `${'='.repeat(60)}\nTOTAL SAVINGS: $${bom.totalSavings.toFixed(2)}\n`;
+
+    navigator.clipboard.writeText(output);
+    setToastMessage('Vendor-grouped order copied!');
+    setTimeout(() => setToastMessage(null), 2500);
+  }, []);
+
+  // --- Change 1 (part): Copy recommendations ---
+  const copyRecommendations = useCallback((bom: Bom) => {
+    const switchItems = bom.items.filter(i => i.bestVendor !== 'McMaster-Carr' && i.savings > 0);
+    const stayItems = bom.items.filter(i => i.bestVendor === 'McMaster-Carr' || i.savings === 0);
+
+    let output = `RECOMMENDATIONS — ${bom.name} (${bom.id})\n${'='.repeat(50)}\n\n`;
+
+    if (switchItems.length > 0) {
+      output += `SWITCH VENDORS (${switchItems.length} parts):\n`;
+      for (const item of switchItems) {
+        output += `  • ${item.partNumber} → ${item.bestVendor} (save $${item.savings.toFixed(2)})\n`;
+      }
+      output += '\n';
+    }
+
+    if (stayItems.length > 0) {
+      output += `KEEP CURRENT (${stayItems.length} parts):\n`;
+      for (const item of stayItems) {
+        output += `  • ${item.partNumber} — ${item.bestVendor}\n`;
+      }
+      output += '\n';
+    }
+
+    output += `Total Savings: $${bom.totalSavings.toFixed(2)}\n`;
+
+    navigator.clipboard.writeText(output);
+    setToastMessage('Recommendations copied!');
+    setTimeout(() => setToastMessage(null), 2500);
+  }, []);
 
   // Fetch from API — falls back to mock data if API returns mock flag
   const fetchBoms = useCallback(async () => {
@@ -333,10 +424,10 @@ export default function Dashboard() {
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
-            { icon: DollarSign, label: 'Monthly Savings', value: `$${stats.totalSavingsMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: '↑ 18% vs last month', subColor: 'text-emerald-400/70', accent: true },
-            { icon: Package, label: 'BOMs Analyzed', value: stats.bomsAnalyzed.toString(), sub: 'This month', subColor: 'text-white/30', accent: false },
-            { icon: TrendingDown, label: 'Avg Savings / BOM', value: `$${stats.avgSavingsPerBom.toFixed(2)}`, sub: 'Grainger saves most', subColor: 'text-white/30', accent: false },
-            { icon: Zap, label: 'Detection Speed', value: stats.avgTimeToNotify, sub: 'After BOM approval', subColor: 'text-white/30', accent: false },
+            { icon: DollarSign, label: 'Monthly Savings', value: `$${computedStats.totalSavingsMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `${computedStats.bomsAnalyzed} BOMs contributing`, subColor: 'text-emerald-400/70', accent: true },
+            { icon: Package, label: 'BOMs Analyzed', value: computedStats.bomsAnalyzed.toString(), sub: `${boms.length} total in system`, subColor: 'text-white/30', accent: false },
+            { icon: TrendingDown, label: 'Avg Savings / BOM', value: `$${computedStats.avgSavingsPerBom.toFixed(2)}`, sub: computedStats.avgSavingsPerBom > 0 ? 'Per analyzed BOM' : 'No data yet', subColor: 'text-white/30', accent: false },
+            { icon: Zap, label: 'Detection Speed', value: computedStats.avgTimeToNotify, sub: 'After BOM approval', subColor: 'text-white/30', accent: false },
           ].map((stat, i) => (
             <div key={i} className={`rounded-xl p-4 border transition-all duration-300 cursor-default hover:scale-[1.02] ${stat.accent ? 'bg-emerald-500/[0.04] border-emerald-500/15 hover:border-emerald-500/25 hover:bg-emerald-500/[0.07]' : 'bg-white/[0.03] border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05]'}`}>
               <div className="flex items-center gap-2 mb-2">
@@ -347,12 +438,6 @@ export default function Dashboard() {
               <p className={`text-[11px] mt-1 ${stat.subColor}`}>{stat.sub}</p>
             </div>
           ))}
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-          <SavingsChart />
-          <VendorChart />
         </div>
 
         {/* Alert Banner */}
@@ -487,6 +572,51 @@ export default function Dashboard() {
                         </button>
                       </div>
                     </div>
+                    {/* Recommendation Strip */}
+                    {(() => {
+                      const switchItems = bom.items.filter(i => i.bestVendor !== 'McMaster-Carr' && i.savings > 0);
+                      const stayItems = bom.items.filter(i => i.bestVendor === 'McMaster-Carr' || i.savings === 0);
+                      const topVendor = switchItems.length > 0
+                        ? Object.entries(
+                            switchItems.reduce<Record<string, number>>((acc, i) => {
+                              acc[i.bestVendor] = (acc[i.bestVendor] || 0) + 1;
+                              return acc;
+                            }, {})
+                          ).sort((a, b) => b[1] - a[1])[0][0]
+                        : null;
+                      return (
+                        <div className="px-4 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.04] bg-emerald-500/[0.02]">
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className="text-white/50">
+                              {switchItems.length > 0 ? (
+                                <><span className="text-emerald-400 font-medium">{switchItems.length} of {bom.items.length}</span> parts: switch{topVendor ? ` to ${topVendor}` : ' vendors'}</>
+                              ) : (
+                                <><span className="text-white/60 font-medium">{stayItems.length} of {bom.items.length}</span> parts at best price</>
+                              )}
+                            </span>
+                            {bom.totalSavings > 0 && (
+                              <span className="text-[10px] font-mono text-emerald-400/70 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                Save ${bom.totalSavings.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); exportByVendor(bom); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
+                            >
+                              <ShoppingCart className="w-3 h-3" /> Export by Vendor
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); copyRecommendations(bom); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
+                            >
+                              <ClipboardList className="w-3 h-3" /> Copy Recommendations
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -621,6 +751,18 @@ export default function Dashboard() {
                                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                     {item.bestVendor}
                                   </span>
+                                  {(() => {
+                                    const bestKey = item.bestVendor === 'McMaster-Carr' ? 'mcmaster' : item.bestVendor === 'Grainger' ? 'grainger' : item.bestVendor === 'DigiKey' ? 'digikey' : item.bestVendor === 'Mouser' ? 'mouser' : null;
+                                    const leadTime = bestKey && item.details?.[bestKey]?.leadTimeDays;
+                                    if (leadTime != null) {
+                                      return (
+                                        <span className={`block text-[9px] font-mono mt-1 ${leadTime > 3 ? 'text-amber-400/70' : 'text-emerald-400/70'}`}>
+                                          {leadTime} day{leadTime !== 1 ? 's' : ''}
+                                        </span>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
                                 </td>
                                 <td className="px-3 py-3 text-right text-xs font-mono font-medium text-emerald-400">
                                   {item.savings > 0 ? `$${item.savings.toFixed(2)}` : '—'}
@@ -679,6 +821,24 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Analytics Section — Collapsible Charts */}
+        <div className="mb-6">
+          <button
+            onClick={() => setAnalyticsOpen(!analyticsOpen)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:text-white/80 hover:bg-white/[0.03] transition-all duration-200"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Analytics
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${analyticsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {analyticsOpen && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 animate-in">
+              <SavingsChart />
+              <VendorChart />
+            </div>
+          )}
+        </div>
+
         {/* How It Works */}
         <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-5 sm:p-6 mb-6">
           <div className="flex items-center gap-2 mb-5">
@@ -717,6 +877,19 @@ export default function Dashboard() {
         </div>
         </>}
       </main>
+
+      {/* Success Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in">
+          <div className="bg-emerald-500/20 border border-emerald-500/30 rounded-xl px-5 py-3 flex items-center gap-3 shadow-2xl backdrop-blur-md">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <p className="text-sm text-emerald-300">{toastMessage}</p>
+            <button onClick={() => setToastMessage(null)} className="text-emerald-400/50 hover:text-emerald-400 transition-colors p-1">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Error Toast */}
       {analysisError && (

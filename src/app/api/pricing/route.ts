@@ -39,10 +39,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Strip HTML tags from a string
+    const stripHtml = (str: string) => str.replace(/<[^>]*>/g, '');
+
+    // Validate input lengths and sanitize
+    for (const item of body.items) {
+      const pn = String(item.partNumber || '').trim();
+      const desc = String(item.description || '').trim();
+      if (pn.length > 100) {
+        return NextResponse.json(
+          { error: `Part number exceeds 100 characters: "${pn.slice(0, 20)}..."` },
+          { status: 400 }
+        );
+      }
+      if (desc.length > 500) {
+        return NextResponse.json(
+          { error: `Description exceeds 500 characters for part "${pn}"` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Validate items
     const validItems = body.items.map(item => ({
-      partNumber: String(item.partNumber || '').trim(),
-      description: String(item.description || '').trim(),
+      partNumber: stripHtml(String(item.partNumber || '').trim()),
+      description: stripHtml(String(item.description || '').trim()),
       qty: Math.max(1, parseInt(String(item.qty)) || 1),
     })).filter(item => item.partNumber.length > 0);
 
