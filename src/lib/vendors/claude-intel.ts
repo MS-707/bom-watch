@@ -1,13 +1,29 @@
 /**
  * Claude AI Price Intelligence
  *
- * Uses Claude API with web_search to find distributor pricing
- * across DigiKey, Arrow, Newark, LCSC, and others.
+ * Uses Claude API with web_search to find distributor pricing.
+ * For mechanical parts: searches Grainger, MSC, Fastenal, etc.
+ * For electronic parts: searches DigiKey, Arrow, Newark, LCSC.
  * Serves as the fallback when OEM Secrets is unavailable.
  *
  * Required env vars:
  *   ANTHROPIC_API_KEY
  */
+
+const CONCURRENCY_LIMIT = 5;
+
+/** Extract the first complete JSON object from text using brace-counting */
+function extractJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') depth--;
+    if (depth === 0) return text.substring(start, i + 1);
+  }
+  return null;
+}
 
 export interface ClaudeIntelResult {
   partNumber: string;
@@ -136,16 +152,15 @@ export async function claudeAnalyzePart(partNumber: string, description?: string
       }
     }
 
-    // Parse JSON from response — try to find the outermost JSON object
-    // Strip markdown fences if present
+    // Parse JSON from response using brace-counting (handles nested objects correctly)
     const cleaned = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const jsonStr = extractJsonObject(cleaned);
+    if (!jsonStr) {
       console.error('[ClaudeIntel] No JSON in response:', responseText.slice(0, 300));
       return { partNumber, bestPrice: null, bestSource: null, sourceUrl: null, insight: responseText.slice(0, 150), alternatives: [], searched: true };
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonStr);
 
     return {
       partNumber,
@@ -168,7 +183,7 @@ export async function claudeAnalyzePart(partNumber: string, description?: string
 }
 
 /**
- * Analyze multiple parts in parallel.
+ * Analyze multiple parts with bounded concurrency.
  * Pass descriptions map so McMaster specs can be used for cross-referencing.
  */
 export async function claudeAnalyzeParts(
@@ -177,17 +192,21 @@ export async function claudeAnalyzeParts(
 ): Promise<Map<string, ClaudeIntelResult>> {
   const results = new Map<string, ClaudeIntelResult>();
 
-  const searches = await Promise.allSettled(
-    partNumbers.map(async (pn) => {
-      const desc = descriptions?.get(pn);
-      const result = await claudeAnalyzePart(pn, desc);
-      return { pn, result };
-    })
-  );
+  // Process in batches to avoid hitting Anthropic rate limits
+  for (let i = 0; i < partNumbers.length; i += CONCURRENCY_LIMIT) {
+    const batch = partNumbers.slice(i, i + CONCURRENCY_LIMIT);
+    const searches = await Promise.allSettled(
+      batch.map(async (pn) => {
+        const desc = descriptions?.get(pn);
+        const result = await claudeAnalyzePart(pn, desc);
+        return { pn, result };
+      })
+    );
 
-  for (const search of searches) {
-    if (search.status === 'fulfilled') {
-      results.set(search.value.pn, search.value.result);
+    for (const search of searches) {
+      if (search.status === 'fulfilled') {
+        results.set(search.value.pn, search.value.result);
+      }
     }
   }
 

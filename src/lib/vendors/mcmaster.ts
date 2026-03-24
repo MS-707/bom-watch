@@ -28,55 +28,55 @@ const API_BASE = 'https://api.mcmaster.com';
 // Cache auth token (valid 24 hours)
 let cachedToken: string | null = null;
 let tokenExpiry: Date | null = null;
+let loginPromise: Promise<string> | null = null;
+
+// Cache HTTPS agent to avoid re-reading cert files
+let cachedAgent: https.Agent | null = null;
 
 // Cache subscribed part numbers to avoid re-subscribing
 const subscribedParts = new Set<string>();
 
 function getHttpsAgent(): https.Agent | null {
+  if (cachedAgent) return cachedAgent;
+
   // McMaster's API server uses a certificate not in Node's default CA bundle.
   // We trust their server directly since we're using mutual TLS with our client cert.
   const tlsOptions = { rejectUnauthorized: false };
+
+  let agent: https.Agent | null = null;
 
   // Option 1: PEM cert + key files (most compatible with Node.js)
   const certPath = process.env.MCMASTER_CERT_PEM_PATH;
   const keyPath = process.env.MCMASTER_KEY_PEM_PATH;
   if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-    return new https.Agent({
-      cert: fs.readFileSync(certPath),
-      key: fs.readFileSync(keyPath),
-      ...tlsOptions,
-    });
+    agent = new https.Agent({ cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath), ...tlsOptions });
   }
 
   // Option 2: Base64-encoded PEM cert + key (for Vercel deployment)
-  const certB64 = process.env.MCMASTER_CERT_PEM_B64;
-  const keyB64 = process.env.MCMASTER_KEY_PEM_B64;
-  if (certB64 && keyB64) {
-    return new https.Agent({
-      cert: Buffer.from(certB64, 'base64'),
-      key: Buffer.from(keyB64, 'base64'),
-      ...tlsOptions,
-    });
+  if (!agent) {
+    const certB64 = process.env.MCMASTER_CERT_PEM_B64;
+    const keyB64 = process.env.MCMASTER_KEY_PEM_B64;
+    if (certB64 && keyB64) {
+      agent = new https.Agent({ cert: Buffer.from(certB64, 'base64'), key: Buffer.from(keyB64, 'base64'), ...tlsOptions });
+    }
   }
 
   // Option 3: PFX file (may not work on all Node versions)
-  const certPassword = process.env.MCMASTER_CERT_PASSWORD || '';
-  const pfxB64 = process.env.MCMASTER_CERT_PFX_B64;
-  if (pfxB64) {
-    return new https.Agent({
-      pfx: Buffer.from(pfxB64, 'base64'),
-      passphrase: certPassword,
-    });
-  }
-  const pfxPath = process.env.MCMASTER_CERT_PFX_PATH;
-  if (pfxPath && fs.existsSync(pfxPath)) {
-    return new https.Agent({
-      pfx: fs.readFileSync(pfxPath),
-      passphrase: certPassword,
-    });
+  if (!agent) {
+    const certPassword = process.env.MCMASTER_CERT_PASSWORD || '';
+    const pfxB64 = process.env.MCMASTER_CERT_PFX_B64;
+    if (pfxB64) {
+      agent = new https.Agent({ pfx: Buffer.from(pfxB64, 'base64'), passphrase: certPassword });
+    } else {
+      const pfxPath = process.env.MCMASTER_CERT_PFX_PATH;
+      if (pfxPath && fs.existsSync(pfxPath)) {
+        agent = new https.Agent({ pfx: fs.readFileSync(pfxPath), passphrase: certPassword });
+      }
+    }
   }
 
-  return null;
+  cachedAgent = agent;
+  return agent;
 }
 
 async function fetchWithCert(
@@ -130,6 +130,14 @@ async function login(): Promise<string> {
     return cachedToken;
   }
 
+  // Prevent concurrent login calls — reuse in-flight promise
+  if (loginPromise) return loginPromise;
+
+  loginPromise = doLogin().finally(() => { loginPromise = null; });
+  return loginPromise;
+}
+
+async function doLogin(): Promise<string> {
   const username = process.env.MCMASTER_USERNAME;
   const password = process.env.MCMASTER_PASSWORD;
   if (!username || !password) throw new Error('McMaster credentials not configured');

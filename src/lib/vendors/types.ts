@@ -61,6 +61,8 @@ export interface ClaudeIntel {
   }>;
 }
 
+export type PriceSource = 'api' | 'estimated' | 'ai' | null;
+
 export interface PricedItem {
   partNumber: string;
   description: string;
@@ -70,6 +72,13 @@ export interface PricedItem {
     grainger: number | null;
     digikey: number | null;
     mouser: number | null;
+  };
+  /** Tracks where each vendor price came from — 'api' (live), 'estimated' (simulated), 'ai', or null (no data) */
+  vendorSources: {
+    mcmaster: PriceSource;
+    grainger: PriceSource;
+    digikey: PriceSource;
+    mouser: PriceSource;
   };
   bestVendor: string;
   bestPrice: number | null;

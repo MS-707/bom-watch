@@ -18,7 +18,7 @@ import { McMasterClient, isMcMasterConfigured } from './mcmaster';
 import { searchMarketPrices } from './market-intel';
 import { claudeAnalyzeParts } from './claude-intel';
 import { isOemSecretsConfigured, searchOemSecretsBatch } from './oemsecrets';
-import type { VendorClient, PricingRequest, PricingResponse, PricedItem } from './types';
+import type { VendorClient, VendorPriceResult, PricingRequest, PricingResponse, PricedItem, PriceSource } from './types';
 
 // Singleton clients
 const mcmaster = new McMasterClient();
@@ -76,6 +76,7 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
 
   // Step 1: Fetch McMaster product data first (gives us descriptions for Claude)
   const mcmasterDescriptions = new Map<string, string>();
+  const mcmasterCache = new Map<string, VendorPriceResult>();
   if (useMcMaster) {
     await Promise.allSettled(
       request.items.map(async (item) => {
@@ -84,8 +85,7 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
             const result = await mcmaster.searchByPartNumber(item.partNumber, item.qty);
             if (result) {
               mcmasterDescriptions.set(item.partNumber, result.description);
-              // Cache the price so we don't re-fetch below
-              (item as Record<string, unknown>)._mcmasterResult = result;
+              mcmasterCache.set(item.partNumber, result);
             }
           } catch { /* handled below */ }
         }
@@ -121,15 +121,21 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
       let graingerPrice: number | null = null;
       let digikeyPrice: number | null = null;
       let mouserPrice: number | null = null;
+      let mcmasterSource: PriceSource = null;
+      let graingerSource: PriceSource = null;
+      let digikeySource: PriceSource = null;
+      let mouserSource: PriceSource = null;
       const details: PricedItem['details'] = {};
+      const itemDesc = item.description || '';
 
       // McMaster-Carr: use cached result from Step 1, or fetch if not cached
       if (useMcMaster && partType !== 'electronic') {
         try {
-          const mcResult = (item as Record<string, unknown>)._mcmasterResult as Awaited<ReturnType<typeof mcmaster.searchByPartNumber>> | undefined
+          const mcResult = mcmasterCache.get(item.partNumber)
             || await mcmaster.searchByPartNumber(item.partNumber, item.qty);
           if (mcResult) {
             mcmasterPrice = mcResult.unitPrice;
+            mcmasterSource = 'api';
             details.mcmaster = {
               inStock: mcResult.inStock,
               stockQty: mcResult.stockQty,
@@ -148,13 +154,19 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
       // Fallback to simulated McMaster price if API didn't return data
       if (mcmasterPrice === null) {
         mcmasterPrice = simulateMcMasterPrice(item.partNumber);
+        if (mcmasterPrice !== null) mcmasterSource = 'estimated';
       }
 
       if (oem && oem.found) {
         // --- OEM Secrets provided real data ---
         digikeyPrice = oem.digikey;
+        if (digikeyPrice !== null) digikeySource = 'api';
         mouserPrice = oem.mouser;
-        if (oem.grainger !== null) graingerPrice = oem.grainger;
+        if (mouserPrice !== null) mouserSource = 'api';
+        if (oem.grainger !== null) {
+          graingerPrice = oem.grainger;
+          graingerSource = 'api';
+        }
 
         // Merge OEM Secrets details
         for (const [key, detail] of Object.entries(oem.details)) {
@@ -181,17 +193,21 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
 
           if (r.vendor === 'DigiKey') {
             digikeyPrice = r.unitPrice;
+            digikeySource = 'api';
             details.digikey = { inStock: r.inStock, stockQty: r.stockQty, url: r.url, leadTimeDays: r.leadTimeDays };
           } else if (r.vendor === 'Mouser') {
             mouserPrice = r.unitPrice;
+            mouserSource = 'api';
             details.mouser = { inStock: r.inStock, stockQty: r.stockQty, url: r.url, leadTimeDays: r.leadTimeDays };
           } else if (r.vendor === 'Grainger') {
             if (r.unitPrice === 0 && mcmasterPrice !== null) {
               graingerPrice = GraingerClient.computeSimulatedPrice(
-                mcmasterPrice, item.description || '', item.partNumber
+                mcmasterPrice, itemDesc, item.partNumber
               );
+              graingerSource = 'estimated';
             } else {
               graingerPrice = r.unitPrice || null;
+              if (graingerPrice !== null) graingerSource = 'api';
             }
             details.grainger = { inStock: r.inStock, stockQty: r.stockQty, url: r.url, leadTimeDays: r.leadTimeDays };
           }
@@ -201,8 +217,9 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
       // For mechanical parts without OEM Secrets Grainger data, simulate
       if (graingerPrice === null && partType === 'mechanical' && mcmasterPrice !== null) {
         graingerPrice = GraingerClient.computeSimulatedPrice(
-          mcmasterPrice, item.description || '', item.partNumber
+          mcmasterPrice, itemDesc, item.partNumber
         );
+        graingerSource = 'estimated';
       }
 
       // Determine best vendor from main columns
@@ -223,6 +240,7 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
         description: item.description || '',
         qty: item.qty,
         vendors: { mcmaster: mcmasterPrice, grainger: graingerPrice, digikey: digikeyPrice, mouser: mouserPrice },
+        vendorSources: { mcmaster: mcmasterSource, grainger: graingerSource, digikey: digikeySource, mouser: mouserSource },
         bestVendor,
         bestPrice,
         savings,
