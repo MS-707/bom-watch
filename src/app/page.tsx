@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, Bell, BarChart3, Zap, Search, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Plus, ShoppingCart, ClipboardList } from 'lucide-react';
+import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, Bell, BarChart3, Zap, Search, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Plus, ShoppingCart, ClipboardList, HelpCircle } from 'lucide-react';
 import { SavingsChart, VendorChart } from './charts';
 import { ManualBomDrawer } from './manual-bom';
+import { OnboardingOverlay } from './onboarding-overlay';
 import { DataToggle, type DataSource } from './data-toggle';
 
 // --- Types ---
@@ -119,6 +120,7 @@ export default function Dashboard() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [liveApiCount, setLiveApiCount] = useState(0);
   const [liveApiNames, setLiveApiNames] = useState<string[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // --- Change 5: Compute stats from actual BOMs ---
   const computedStats = useMemo(() => {
@@ -177,6 +179,65 @@ export default function Dashboard() {
 
     navigator.clipboard.writeText(output);
     setToastMessage('Vendor-grouped order copied!');
+    setTimeout(() => setToastMessage(null), 2500);
+  }, []);
+
+  // --- Vendor-grouped CSV file download ---
+  const downloadVendorCSV = useCallback((bom: Bom) => {
+    const groups: Record<string, BomItem[]> = {};
+    for (const item of bom.items) {
+      const vendor = item.bestVendor;
+      if (!groups[vendor]) groups[vendor] = [];
+      groups[vendor].push(item);
+    }
+
+    const vendorKey = (vendor: string): 'mcmaster' | 'grainger' | 'digikey' | 'mouser' => {
+      const map: Record<string, 'mcmaster' | 'grainger' | 'digikey' | 'mouser'> = {
+        'McMaster-Carr': 'mcmaster', 'Grainger': 'grainger', 'DigiKey': 'digikey', 'Mouser': 'mouser',
+      };
+      return map[vendor] || 'mcmaster';
+    };
+
+    const escapeCSV = (val: string) => {
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+
+    const headers = ['Vendor', 'Part Number', 'Description', 'Qty', 'Unit Price', 'Line Total', 'Product URL'];
+    const rows: string[] = [headers.join(',')];
+
+    for (const [vendor, items] of Object.entries(groups)) {
+      rows.push(`"--- ${vendor} ---","","","","","",""`);
+      for (const item of items) {
+        const key = vendorKey(vendor);
+        const unitPrice = item[key] ?? 0;
+        const lineTotal = unitPrice * item.qty;
+        const detail = item.details?.[key];
+        const url = detail?.url || '';
+        rows.push([
+          escapeCSV(vendor),
+          escapeCSV(item.partNumber),
+          escapeCSV(item.description),
+          String(item.qty),
+          unitPrice.toFixed(2),
+          lineTotal.toFixed(2),
+          escapeCSV(url),
+        ].join(','));
+      }
+    }
+
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${bom.id}-vendor-orders.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setToastMessage('Vendor CSV downloaded!');
     setTimeout(() => setToastMessage(null), 2500);
   }, []);
 
@@ -394,8 +455,15 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2 sm:gap-4">
               <DataToggle source={dataSource} onSourceChange={setDataSource} isLive={isLive} />
-              <button 
-                onClick={fetchBoms} 
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-all duration-200 font-mono"
+                title="How to use BOM Watch"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={fetchBoms}
                 disabled={refreshing}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-all duration-200 font-mono disabled:opacity-50"
                 title={lastRefresh ? `Last refreshed: ${lastRefresh.toLocaleTimeString()}` : 'Refresh data'}
@@ -613,6 +681,13 @@ export default function Dashboard() {
                               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
                             >
                               <ShoppingCart className="w-3 h-3" /> Export by Vendor
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); downloadVendorCSV(bom); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
+                              title="Download vendor-grouped CSV file"
+                            >
+                              <Download className="w-3 h-3" />
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); copyRecommendations(bom); }}
@@ -959,6 +1034,12 @@ export default function Dashboard() {
         onClose={() => setManualBomOpen(false)}
         onSubmit={handleManualBom}
         isAnalyzing={isAnalyzing}
+      />
+
+      {/* Onboarding Overlay — shows on first visit or when "?" is clicked */}
+      <OnboardingOverlay
+        forceShow={showOnboarding}
+        onDismiss={() => setShowOnboarding(false)}
       />
     </div>
   );
