@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { AlertTriangle, TrendingDown, Package, DollarSign, Clock, ArrowRight, ExternalLink, CheckCircle2, X, ChevronDown, Bell, BarChart3, Zap, Search, Copy, Download, ArrowUpRight, Sparkles, RefreshCw, Loader2, Plus, ShoppingCart, ClipboardList } from 'lucide-react';
 import { SavingsChart, VendorChart } from './charts';
 import { ManualBomDrawer } from './manual-bom';
@@ -117,6 +117,7 @@ export default function Dashboard() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [liveApiCount, setLiveApiCount] = useState(0);
+  const [liveApiNames, setLiveApiNames] = useState<string[]>([]);
 
   // --- Change 5: Compute stats from actual BOMs ---
   const computedStats = useMemo(() => {
@@ -226,9 +227,11 @@ export default function Dashboard() {
           totalSavingsMonth: data.stats?.totalSavingsMonth ?? fallbackStats.totalSavingsMonth,
           bomsAnalyzed: data.stats?.bomsAnalyzed ?? fallbackStats.bomsAnalyzed,
           avgSavingsPerBom: data.stats?.avgSavingsPerBom ?? fallbackStats.avgSavingsPerBom,
-          avgTimeToNotify: '< 30s',
+          avgTimeToNotify: String(data.liveApis ?? '—'),
         });
         setIsLive(!!data.live);
+        if (data.liveApis) setLiveApiCount(data.liveApis);
+        if (data.liveApiNames) setLiveApiNames(data.liveApiNames);
       }
       setLastRefresh(new Date());
     } catch {
@@ -430,7 +433,7 @@ export default function Dashboard() {
             { icon: DollarSign, label: 'Monthly Savings', value: `$${computedStats.totalSavingsMonth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: `${computedStats.bomsAnalyzed} BOMs contributing`, subColor: 'text-emerald-400/70', accent: true },
             { icon: Package, label: 'BOMs Analyzed', value: computedStats.bomsAnalyzed.toString(), sub: `${boms.length} total in system`, subColor: 'text-white/30', accent: false },
             { icon: TrendingDown, label: 'Avg Savings / BOM', value: `$${computedStats.avgSavingsPerBom.toFixed(2)}`, sub: computedStats.avgSavingsPerBom > 0 ? 'Per analyzed BOM' : 'No data yet', subColor: 'text-white/30', accent: false },
-            { icon: Zap, label: 'Live APIs', value: computedStats.avgTimeToNotify, sub: 'Vendor integrations active', subColor: 'text-white/30', accent: false },
+            { icon: Zap, label: 'Live APIs', value: computedStats.avgTimeToNotify, sub: liveApiNames.length > 0 ? liveApiNames.join(', ') : 'Vendor integrations active', subColor: liveApiNames.length > 0 ? 'text-emerald-400/50' : 'text-white/30', accent: false },
           ].map((stat, i) => (
             <div key={i} className={`rounded-xl p-4 border transition-all duration-300 cursor-default hover:scale-[1.02] ${stat.accent ? 'bg-emerald-500/[0.04] border-emerald-500/15 hover:border-emerald-500/25 hover:bg-emerald-500/[0.07]' : 'bg-white/[0.03] border-white/[0.06] hover:border-white/10 hover:bg-white/[0.05]'}`}>
               <div className="flex items-center gap-2 mb-2">
@@ -454,10 +457,10 @@ export default function Dashboard() {
                 <span className="text-[10px] font-mono text-amber-400/70 uppercase tracking-wider">New BOM Detected</span>
                 <span className="text-[10px] text-white/30">2 hours ago</span>
               </div>
-              <p className="font-medium text-white">Gripper Assembly v3.2</p>
-              <p className="text-sm text-white/50 mt-0.5">5 new OTS parts · Estimated savings: <span className="text-emerald-400 font-medium">$342.50</span> · Engineer: Sarah Chen</p>
+              <p className="font-medium text-white">Z-Drive Assembly — ECO-00005</p>
+              <p className="text-sm text-white/50 mt-0.5">5 new OTS parts · Estimated savings: <span className="text-emerald-400 font-medium">$1,275.54</span> · Assignee: Rebecca</p>
               <div className="flex gap-2 mt-3">
-                <button onClick={() => { setExpandedBom('BOM-2847'); setAlertDismissed(true); }} className="px-3 py-1.5 bg-amber-500/20 text-amber-300 text-xs font-medium rounded-lg hover:bg-amber-500/30 transition-colors border border-amber-500/20">
+                <button onClick={() => { setExpandedBom('BOM-3001'); setAlertDismissed(true); }} className="px-3 py-1.5 bg-amber-500/20 text-amber-300 text-xs font-medium rounded-lg hover:bg-amber-500/30 transition-colors border border-amber-500/20">
                   View Analysis
                 </button>
                 <button onClick={() => setAlertDismissed(true)} className="px-3 py-1.5 text-white/40 text-xs font-medium rounded-lg hover:text-white/60 hover:bg-white/5 transition-colors">
@@ -620,163 +623,198 @@ export default function Dashboard() {
                         </div>
                       );
                     })()}
-                    <div className="overflow-x-auto">
+                    <div>
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-white/[0.06]">
                             <th className="px-5 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Part</th>
                             <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Qty</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">McMaster <span className="text-emerald-400/60 text-[8px] normal-case">api</span></th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Grainger <span className="text-amber-400/60 text-[8px] normal-case">soon</span></th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">DigiKey <span className="text-emerald-400/60 text-[8px] normal-case">api</span></th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Mouser <span className="text-emerald-400/60 text-[8px] normal-case">api</span></th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-purple-400/50 uppercase tracking-wider">Market Intel</th>
-                            <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Best</th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Best Price</th>
+                            <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Stock</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Vendor</th>
+                            <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Alts</th>
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Saved</th>
                           </tr>
                         </thead>
                         <tbody>
                           {bom.items.map((item, i) => {
-                            const prices = [item.mcmaster, item.grainger, item.digikey, item.mouser].filter((p): p is number => p !== null && p !== undefined);
-                            const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-                            const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
-                            const PriceCell = ({ val, source }: { val: number | null; source?: PriceSource }) => (
-                              <td className={`px-3 py-3 text-right text-xs font-mono ${val === minPrice && prices.length > 1 ? 'text-emerald-400 font-medium bg-emerald-500/[0.06]' : val === maxPrice && val !== minPrice ? 'text-red-400/50' : val ? 'text-white/40' : 'text-white/10'}`}>
-                                {val ? (
-                                  <span className="flex items-center justify-end gap-1.5">
-                                    {source === 'estimated' && <span className="text-[7px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400/60 uppercase">est</span>}
-                                    ${val.toFixed(2)}
-                                  </span>
-                                ) : '—'}
-                              </td>
-                            );
+                            // Compute best price across ALL sources (vendors + claudeIntel)
+                            const allPrices = [
+                              item.mcmaster ? { price: item.mcmaster, vendor: 'McMaster-Carr', source: item.vendorSources?.mcmaster } : null,
+                              item.grainger ? { price: item.grainger, vendor: 'Grainger', source: item.vendorSources?.grainger } : null,
+                              item.digikey ? { price: item.digikey, vendor: 'DigiKey', source: item.vendorSources?.digikey } : null,
+                              item.mouser ? { price: item.mouser, vendor: 'Mouser', source: item.vendorSources?.mouser } : null,
+                              item.claudeIntel?.bestPrice ? { price: item.claudeIntel.bestPrice, vendor: item.claudeIntel.bestSource || 'AI Found', source: 'ai' as PriceSource } : null,
+                            ].filter((p): p is { price: number; vendor: string; source: PriceSource } => p !== null);
+                            allPrices.sort((a, b) => a.price - b.price);
+                            const best = allPrices[0] || null;
+
+                            // Count alternatives (all sources except the best)
                             const vendorLinks = item.details ? Object.entries(item.details).filter(([, d]) => d.url) : [];
+                            const aiAlts = item.claudeIntel?.alternatives?.length || 0;
+                            const altCount = Math.max(0, allPrices.length - 1) + aiAlts;
+
+                            // Stock status from best vendor's details
+                            const bestKey = best ? best.vendor.toLowerCase().replace('-carr', '').replace(' ', '') : null;
+                            const bestDetail = bestKey ? Object.entries(item.details || {}).find(([k]) => k.toLowerCase().includes(bestKey || '')) : null;
+                            const inStock = bestDetail ? bestDetail[1].inStock : null;
+                            const stockQty = bestDetail ? bestDetail[1].stockQty : null;
+                            const leadTime = bestDetail ? bestDetail[1].leadTimeDays : null;
+
+                            // Risk flags
+                            const riskFlags = (item as { riskFlags?: Array<{ type: string; message: string }> }).riskFlags || [];
+                            const hasRisk = riskFlags.length > 0;
+
+                            // Expand state
                             const partKey = `${bom.id}-${item.partNumber}`;
                             const isPartExpanded = expandedPart === partKey;
-                            const allSources = item.claudeIntel ? [
-                              ...(item.claudeIntel.bestPrice !== null ? [{ distributor: item.claudeIntel.bestSource || 'Unknown', price: item.claudeIntel.bestPrice, url: item.claudeIntel.sourceUrl || '', note: 'Best price' }] : []),
-                              ...item.claudeIntel.alternatives,
-                            ] : [];
-                            const vendorCount = allSources.length + vendorLinks.length;
+
                             return (
-                              <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors duration-150">
+                              <React.Fragment key={i}>
+                              <tr className={`border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors duration-150 cursor-pointer ${hasRisk ? 'border-l-2 border-l-amber-500/30' : ''}`} onClick={() => setExpandedPart(isPartExpanded ? null : partKey)}>
+                                {/* Part */}
                                 <td className="px-5 py-3">
-                                  <div className="flex items-start gap-2">
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-mono text-[11px] text-white/30">{item.partNumber}</p>
-                                      <p className="text-xs text-white/60 truncate max-w-[280px]">{item.description}</p>
-                                      {vendorLinks.length > 0 && (
-                                        <div className="flex items-center gap-2 mt-1.5">
-                                          {vendorLinks.map(([vendor, detail]) => (
-                                            <a key={vendor} href={detail.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors">
-                                              <ExternalLink className="w-2.5 h-2.5" />
-                                              {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
-                                              {detail.stockQty !== null && <span className="text-white/20">({detail.stockQty.toLocaleString()} in stock)</span>}
-                                            </a>
-                                          ))}
-                                        </div>
+                                  <p className="font-mono text-[11px] text-white/30">{item.partNumber}</p>
+                                  <p className="text-xs text-white/60 truncate max-w-[300px]">{item.description}</p>
+                                  {hasRisk && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      {riskFlags.map((flag, fi) => (
+                                        <span key={fi} className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/60 border border-amber-500/15">
+                                          {flag.type === 'single_source' ? 'single source' : flag.type === 'out_of_stock' ? 'out of stock' : flag.type === 'long_lead_time' ? 'long lead' : 'unverified'}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                {/* Qty */}
+                                <td className="px-3 py-3 text-center text-xs text-white/40 font-mono">{item.qty}</td>
+                                {/* Best Price */}
+                                <td className="px-3 py-3 text-right">
+                                  {best ? (
+                                    <div>
+                                      <span className="text-sm font-mono text-emerald-400 font-medium">${best.price.toFixed(2)}</span>
+                                      <span className={`block text-[8px] font-mono mt-0.5 ${best.source === 'api' ? 'text-emerald-400/50' : best.source === 'estimated' ? 'text-amber-400/50' : best.source === 'ai' ? 'text-purple-400/50' : 'text-white/20'}`}>
+                                        {best.source === 'api' ? 'LIVE' : best.source === 'estimated' ? 'EST' : best.source === 'ai' ? 'AI' : ''}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-white/15">—</span>
+                                  )}
+                                </td>
+                                {/* Stock */}
+                                <td className="px-3 py-3 text-center">
+                                  {inStock === true ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                      {stockQty !== null && <span className="text-[9px] font-mono text-white/30">{stockQty.toLocaleString()}</span>}
+                                    </span>
+                                  ) : inStock === false ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="w-2 h-2 rounded-full bg-red-400/60" />
+                                      <span className="text-[9px] font-mono text-red-400/50">out</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] text-white/15">—</span>
+                                  )}
+                                </td>
+                                {/* Vendor */}
+                                <td className="px-3 py-3">
+                                  {best ? (
+                                    <div>
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                        {best.vendor}
+                                      </span>
+                                      {leadTime != null && (
+                                        <span className={`block text-[9px] font-mono mt-1 ${leadTime > 3 ? 'text-amber-400/70' : 'text-emerald-400/70'}`}>
+                                          {leadTime} day{leadTime !== 1 ? 's' : ''}
+                                        </span>
                                       )}
-                                      {item.marketIntel && item.marketIntel.allFindings.length > 0 && (
-                                        <div className="mt-1.5 flex items-center gap-1.5">
-                                          <span className="text-[9px] text-amber-400/70">&#x1F4A1;</span>
-                                          {item.marketIntel.allFindings.slice(0, 3).map((finding, fi) => (
-                                            <a key={fi} href={finding.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-amber-400/50 hover:text-amber-400 transition-colors">
-                                              {finding.distributor} ${finding.price.toFixed(2)}
-                                              {fi < Math.min(2, item.marketIntel!.allFindings.length - 1) && <span className="text-white/10">·</span>}
-                                            </a>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {/* Expandable AI Intelligence Panel */}
-                                      {(allSources.length > 0 || item.claudeIntel?.insight) && (
-                                        <button
-                                          onClick={(e) => { e.stopPropagation(); setExpandedPart(isPartExpanded ? null : partKey); }}
-                                          className="mt-2 flex items-center gap-1.5 text-[11px] font-mono text-purple-400/70 hover:text-purple-400 transition-colors cursor-pointer"
-                                        >
-                                          <Sparkles className="w-3 h-3" />
-                                          <span>{vendorCount} vendor{vendorCount !== 1 ? 's' : ''} searched</span>
-                                          <ChevronDown className={`w-3 h-3 transition-transform ${isPartExpanded ? 'rotate-180' : ''}`} />
-                                        </button>
-                                      )}
-                                      {isPartExpanded && item.claudeIntel && (
-                                        <div className="mt-2 ml-1 p-3 bg-purple-500/[0.04] border border-purple-500/10 rounded-lg space-y-2 animate-in">
-                                          <p className="text-[10px] font-mono text-purple-400/60 uppercase tracking-wider">AI Price Intelligence</p>
-                                          {allSources.map((src, si) => (
-                                            <div key={si} className="flex items-center justify-between gap-3">
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-white/15">—</span>
+                                  )}
+                                </td>
+                                {/* Alts */}
+                                <td className="px-3 py-3 text-center">
+                                  {altCount > 0 ? (
+                                    <span className="text-[11px] font-mono text-purple-400/70">{altCount}</span>
+                                  ) : (
+                                    <span className="text-[11px] text-white/15">0</span>
+                                  )}
+                                </td>
+                                {/* Saved */}
+                                <td className="px-3 py-3 text-right text-xs font-mono font-medium text-emerald-400">
+                                  {item.savings > 0 ? `$${item.savings.toFixed(2)}` : '—'}
+                                </td>
+                              </tr>
+                              {/* Expanded detail row */}
+                              {isPartExpanded && (
+                                <tr className="bg-white/[0.01]">
+                                  <td colSpan={7} className="px-5 py-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in">
+                                      {/* All vendor prices */}
+                                      <div className="space-y-1.5">
+                                        <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider mb-2">All Vendor Prices</p>
+                                        {allPrices.map((p, pi) => (
+                                          <div key={pi} className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${pi === 0 ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                                              <span className="text-[11px] font-mono text-white/60">{p.vendor}</span>
+                                              <span className={`text-[7px] px-1 py-0.5 rounded uppercase ${p.source === 'api' ? 'bg-emerald-500/10 text-emerald-400/60' : p.source === 'estimated' ? 'bg-amber-500/10 text-amber-400/60' : 'bg-purple-500/10 text-purple-400/60'}`}>
+                                                {p.source === 'api' ? 'live' : p.source === 'estimated' ? 'est' : 'ai'}
+                                              </span>
+                                            </div>
+                                            <span className={`text-[11px] font-mono ${pi === 0 ? 'text-emerald-400 font-medium' : 'text-white/40'}`}>${p.price.toFixed(2)}</span>
+                                          </div>
+                                        ))}
+                                        {vendorLinks.length > 0 && (
+                                          <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
+                                            {vendorLinks.map(([vendor, detail]) => (
+                                              <a key={vendor} href={detail.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors">
+                                                <ExternalLink className="w-2.5 h-2.5" />
+                                                {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
+                                              </a>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                      {/* AI Intelligence */}
+                                      {item.claudeIntel && (
+                                        <div className="space-y-1.5">
+                                          <p className="text-[10px] font-mono text-purple-400/60 uppercase tracking-wider mb-2">Market Intelligence</p>
+                                          {item.claudeIntel.alternatives.map((alt, ai) => (
+                                            <div key={ai} className="flex items-center justify-between gap-3">
                                               <div className="flex items-center gap-2 min-w-0">
-                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${si === 0 ? 'bg-emerald-400' : 'bg-white/20'}`} />
-                                                {src.url ? (
-                                                  <a href={src.url} target="_blank" rel="noopener" className="text-[11px] font-mono text-purple-300/80 hover:text-purple-300 transition-colors truncate">
-                                                    {src.distributor}
-                                                    <ExternalLink className="w-2.5 h-2.5 inline ml-1 opacity-40" />
+                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400/40 flex-shrink-0" />
+                                                {alt.url ? (
+                                                  <a href={alt.url} target="_blank" rel="noopener" className="text-[11px] font-mono text-purple-300/70 hover:text-purple-300 transition-colors truncate">
+                                                    {alt.distributor} <ExternalLink className="w-2.5 h-2.5 inline ml-0.5 opacity-40" />
                                                   </a>
                                                 ) : (
-                                                  <span className="text-[11px] font-mono text-purple-300/60">{src.distributor}</span>
+                                                  <span className="text-[11px] font-mono text-purple-300/50">{alt.distributor}</span>
                                                 )}
-                                                {src.note && <span className="text-[9px] text-white/20">{src.note}</span>}
                                               </div>
-                                              <span className={`text-[11px] font-mono flex-shrink-0 ${si === 0 ? 'text-emerald-400 font-medium' : 'text-white/40'}`}>
-                                                ${src.price.toFixed(2)}
-                                              </span>
+                                              <span className="text-[11px] font-mono text-white/40">${alt.price.toFixed(2)}</span>
                                             </div>
                                           ))}
                                           {item.claudeIntel.insight && (
-                                            <p className="text-[10px] text-purple-300/40 italic leading-relaxed pt-1 border-t border-purple-500/10">
+                                            <p className="text-[10px] text-purple-300/40 italic leading-relaxed pt-2 border-t border-purple-500/10">
                                               {item.claudeIntel.insight}
                                             </p>
                                           )}
                                         </div>
                                       )}
                                     </div>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-3 text-center text-xs text-white/40 font-mono">{item.qty}</td>
-                                <PriceCell val={item.mcmaster} source={item.vendorSources?.mcmaster} />
-                                <PriceCell val={item.grainger} source={item.vendorSources?.grainger} />
-                                <PriceCell val={item.digikey} source={item.vendorSources?.digikey} />
-                                <PriceCell val={item.mouser} source={item.vendorSources?.mouser} />
-                                <td className={`px-3 py-3 text-right text-xs font-mono ${item.claudeIntel?.bestPrice ? 'text-purple-400 font-medium bg-purple-500/[0.06]' : 'text-white/10'}`}>
-                                  {item.claudeIntel?.bestPrice ? (
-                                    item.claudeIntel.sourceUrl ? (
-                                      <a href={item.claudeIntel.sourceUrl} target="_blank" rel="noopener" className="hover:text-purple-300 transition-colors">
-                                        ${item.claudeIntel.bestPrice.toFixed(2)}
-                                        <span className="block text-[8px] text-purple-400/40">{item.claudeIntel.bestSource}</span>
-                                      </a>
-                                    ) : (
-                                      <span>
-                                        ${item.claudeIntel.bestPrice.toFixed(2)}
-                                        <span className="block text-[8px] text-purple-400/40">{item.claudeIntel.bestSource}</span>
-                                      </span>
-                                    )
-                                  ) : '—'}
-                                </td>
-                                <td className="px-3 py-3">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                    {item.bestVendor}
-                                  </span>
-                                  {(() => {
-                                    const bestKey = item.bestVendor === 'McMaster-Carr' ? 'mcmaster' : item.bestVendor === 'Grainger' ? 'grainger' : item.bestVendor === 'DigiKey' ? 'digikey' : item.bestVendor === 'Mouser' ? 'mouser' : null;
-                                    const leadTime = bestKey && item.details?.[bestKey]?.leadTimeDays;
-                                    if (leadTime != null) {
-                                      return (
-                                        <span className={`block text-[9px] font-mono mt-1 ${leadTime > 3 ? 'text-amber-400/70' : 'text-emerald-400/70'}`}>
-                                          {leadTime} day{leadTime !== 1 ? 's' : ''}
-                                        </span>
-                                      );
-                                    }
-                                    return null;
-                                  })()}
-                                </td>
-                                <td className="px-3 py-3 text-right text-xs font-mono font-medium text-emerald-400">
-                                  {item.savings > 0 ? `$${item.savings.toFixed(2)}` : '—'}
-                                </td>
-                              </tr>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                             );
                           })}
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-white/[0.06]">
-                            <td colSpan={8} className="px-5 py-3 text-right text-xs text-white/40 font-mono">TOTAL SAVINGS</td>
+                            <td colSpan={6} className="px-5 py-3 text-right text-xs text-white/40 font-mono">TOTAL SAVINGS</td>
                             <td className="px-3 py-3 text-right text-sm font-mono font-bold text-emerald-400">${bom.totalSavings.toFixed(2)}</td>
                           </tr>
                         </tfoot>

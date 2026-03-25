@@ -101,12 +101,23 @@ export async function GET(req: NextRequest) {
   const paginated = results.slice(offset, offset + limit);
   const isLive = !!process.env.ARENA_API_KEY;
 
+  // Count live vendor integrations from env vars
+  const liveApis: string[] = [];
+  if (process.env.MCMASTER_USERNAME && (process.env.MCMASTER_CERT_PEM_B64 || process.env.MCMASTER_CERT_PEM_PATH)) liveApis.push('McMaster-Carr');
+  if (process.env.OEMSECRETS_API_KEY) liveApis.push('OEM Secrets');
+  if (process.env.MOUSER_API_KEY) liveApis.push('Mouser');
+  if (process.env.DIGIKEY_CLIENT_ID && process.env.DIGIKEY_CLIENT_SECRET) liveApis.push('DigiKey');
+  if (process.env.GRAINGER_API_KEY) liveApis.push('Grainger');
+  if (process.env.ANTHROPIC_API_KEY) liveApis.push('Claude AI');
+
   return NextResponse.json({
     boms: paginated,
     total: results.length,
     limit,
     offset,
     live: isLive,
+    liveApis: liveApis.length,
+    liveApiNames: liveApis,
     stats: {
       totalSavingsMonth: parseFloat(results.reduce((sum, b) => sum + b.totalSavings, 0).toFixed(2)),
       bomsAnalyzed: results.length,
