@@ -122,7 +122,12 @@ export default function Dashboard() {
   const [liveApiCount, setLiveApiCount] = useState(0);
   const [liveApiNames, setLiveApiNames] = useState<string[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [decisions, setDecisions] = useState<Record<string, 'accepted' | 'skipped' | null>>({});
+  const [decisions, setDecisions] = useState<Record<string, 'accepted' | 'skipped' | null>>(() => {
+    if (typeof window !== 'undefined') {
+      try { return JSON.parse(localStorage.getItem('bom-watch-decisions') || '{}'); } catch { return {}; }
+    }
+    return {};
+  });
 
   // --- Decision toggle for per-part accept/skip ---
   const toggleDecision = useCallback((key: string, value: 'accepted' | 'skipped') => {
@@ -131,6 +136,13 @@ export default function Dashboard() {
       [key]: prev[key] === value ? null : value,
     }));
   }, []);
+
+  // --- Persist decisions to localStorage ---
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bom-watch-decisions', JSON.stringify(decisions));
+    }
+  }, [decisions]);
 
   // --- Change 5: Compute stats from actual BOMs ---
   const computedStats = useMemo(() => {
@@ -765,14 +777,31 @@ export default function Dashboard() {
                               </span>
                             )}
                             {decidedCount > 0 && (
-                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${allDecided ? 'text-emerald-400/80 bg-emerald-500/10 border-emerald-500/20' : 'text-white/40 bg-white/[0.04] border-white/[0.06]'}`}>
-                                {allDecided
-                                  ? <><span className="hidden sm:inline">All parts decided &mdash; {acceptedCount} accepted, {skippedCount} skipped</span><span className="sm:hidden">{acceptedCount}&check; {skippedCount}&cross;</span></>
-                                  : `${decidedCount} of ${totalParts} decided`}
-                              </span>
+                              <div className="flex flex-col">
+                                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${allDecided ? 'text-emerald-400/80 bg-emerald-500/10 border-emerald-500/20' : 'text-white/40 bg-white/[0.04] border-white/[0.06]'}`}>
+                                  {allDecided
+                                    ? <><span className="hidden sm:inline">All parts decided &mdash; {acceptedCount} accepted, {skippedCount} skipped</span><span className="sm:hidden">{acceptedCount}&check; {skippedCount}&cross;</span></>
+                                    : `${decidedCount} of ${totalParts} decided`}
+                                </span>
+                                <div className="h-[2px] w-full bg-white/[0.06] rounded-full mt-1 overflow-hidden">
+                                  <div className="h-full bg-emerald-400 rounded-full transition-all duration-300" style={{ width: `${(decidedCount / totalParts) * 100}%` }} />
+                                </div>
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); const next: Record<string, 'accepted' | 'skipped' | null> = { ...decisions }; bom.items.forEach(item => { next[`${bom.id}-${item.partNumber}`] = 'accepted'; }); setDecisions(next); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-emerald-400/50 hover:text-emerald-400 hover:bg-emerald-500/[0.06] transition-all duration-200"
+                            >
+                              <CheckCircle2 className="w-3 h-3" /> <span className="hidden sm:inline">Accept All</span>
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); const next: Record<string, 'accepted' | 'skipped' | null> = { ...decisions }; bom.items.forEach(item => { next[`${bom.id}-${item.partNumber}`] = 'skipped'; }); setDecisions(next); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-amber-400/50 hover:text-amber-400 hover:bg-amber-500/[0.06] transition-all duration-200"
+                            >
+                              <X className="w-3 h-3" /> <span className="hidden sm:inline">Skip All</span>
+                            </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); exportByVendor(bom); }}
                               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
@@ -904,8 +933,16 @@ export default function Dashboard() {
                                 <td className="px-3 py-3">
                                   {best ? (
                                     <div>
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                        {best.vendor}
+                                      <span className="inline-flex items-center gap-1">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                          {best.vendor}
+                                        </span>
+                                        <span
+                                          className="text-[9px] text-white/25 hover:text-white/50 cursor-help transition-colors"
+                                          title={`Lowest price at $${best.price.toFixed(2)}/ea | ${inStock === true ? (stockQty !== null ? `${stockQty.toLocaleString()} in stock` : 'In stock') : inStock === false ? 'Out of stock' : 'Stock unknown'} | ${leadTime != null ? `${leadTime} day${leadTime !== 1 ? 's' : ''} lead` : 'Lead time unknown'}`}
+                                        >
+                                          (i)
+                                        </span>
                                       </span>
                                       {leadTime != null && (
                                         <span className={`block text-[9px] font-mono mt-1 ${leadTime > 3 ? 'text-amber-400/70' : 'text-emerald-400/70'}`}>
@@ -956,6 +993,11 @@ export default function Dashboard() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in">
                                       {/* All vendor prices */}
                                       <div className="space-y-1.5">
+                                        {best && (
+                                          <p className="text-[11px] font-mono text-emerald-400 mb-1">
+                                            Qty: {item.qty} &times; ${best.price.toFixed(2)} = ${(item.qty * best.price).toFixed(2)}
+                                          </p>
+                                        )}
                                         <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider mb-2">All Vendor Prices</p>
                                         {allPrices.map((p, pi) => (
                                           <div key={pi} className="flex items-center justify-between gap-3">
@@ -1131,6 +1173,9 @@ export default function Dashboard() {
                                     ) : (
                                       <span className="text-[10px] font-mono text-white/15">0 alts</span>
                                     )}
+                                    {bestMobile && (
+                                      <span className="text-[10px] font-mono text-emerald-400/70">Total: ${(item.qty * bestMobile.price).toFixed(2)}</span>
+                                    )}
                                   </div>
                                   <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                     <button
@@ -1157,6 +1202,11 @@ export default function Dashboard() {
                                   <div className="space-y-4">
                                     {/* All vendor prices */}
                                     <div className="space-y-1.5">
+                                      {bestMobile && (
+                                        <p className="text-[11px] font-mono text-emerald-400 mb-1">
+                                          Qty: {item.qty} &times; ${bestMobile.price.toFixed(2)} = ${(item.qty * bestMobile.price).toFixed(2)}
+                                        </p>
+                                      )}
                                       <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider mb-2">All Vendor Prices</p>
                                       {allPricesMobile.map((p, pi) => (
                                         <div key={pi} className="flex items-center justify-between gap-3">
