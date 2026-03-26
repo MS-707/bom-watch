@@ -705,8 +705,8 @@ export default function Dashboard() {
                     {/* Action bar */}
                     <div className="px-4 sm:px-5 py-2.5 flex items-center justify-between border-b border-white/[0.04] bg-white/[0.01]">
                       <div className="sm:hidden flex items-center gap-1.5 text-[10px] text-white/20">
-                        <ArrowRight className="w-3 h-3" />
-                        <span>Scroll for full table</span>
+                        <Sparkles className="w-3 h-3" />
+                        <span>Tap a card to expand details</span>
                       </div>
                       <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-white/20">
                         <Sparkles className="w-3 h-3" />
@@ -751,7 +751,7 @@ export default function Dashboard() {
                       const allDecided = decidedCount === totalParts && totalParts > 0;
                       return (
                         <div className="px-4 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.04] bg-emerald-500/[0.02]">
-                          <div className="flex items-center gap-3 text-xs">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
                             <span className="text-white/50">
                               {switchItems.length > 0 ? (
                                 <><span className="text-emerald-400 font-medium">{switchItems.length} of {bom.items.length}</span> parts: switch{topVendor ? ` to ${topVendor}` : ' vendors'}</>
@@ -767,8 +767,8 @@ export default function Dashboard() {
                             {decidedCount > 0 && (
                               <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${allDecided ? 'text-emerald-400/80 bg-emerald-500/10 border-emerald-500/20' : 'text-white/40 bg-white/[0.04] border-white/[0.06]'}`}>
                                 {allDecided
-                                  ? `All parts decided \u2014 ${acceptedCount} accepted, ${skippedCount} skipped`
-                                  : `${decidedCount} of ${totalParts} parts decided`}
+                                  ? <><span className="hidden sm:inline">All parts decided &mdash; {acceptedCount} accepted, {skippedCount} skipped</span><span className="sm:hidden">{acceptedCount}&check; {skippedCount}&cross;</span></>
+                                  : `${decidedCount} of ${totalParts} decided`}
                               </span>
                             )}
                           </div>
@@ -777,7 +777,7 @@ export default function Dashboard() {
                               onClick={(e) => { e.stopPropagation(); exportByVendor(bom); }}
                               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
                             >
-                              <ShoppingCart className="w-3 h-3" /> Export by Vendor
+                              <ShoppingCart className="w-3 h-3" /> <span className="hidden sm:inline">Export by Vendor</span>
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); downloadVendorCSV(bom); }}
@@ -790,13 +790,14 @@ export default function Dashboard() {
                               onClick={(e) => { e.stopPropagation(); copyRecommendations(bom); }}
                               className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-200"
                             >
-                              <ClipboardList className="w-3 h-3" /> Copy Recommendations
+                              <ClipboardList className="w-3 h-3" /> <span className="hidden sm:inline">Copy Recs</span>
                             </button>
                           </div>
                         </div>
                       );
                     })()}
-                    <div>
+                    {/* Desktop table — hidden on mobile */}
+                    <div className="hidden md:block">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-white/[0.06]">
@@ -1021,7 +1022,205 @@ export default function Dashboard() {
                         </tfoot>
                       </table>
                     </div>
-                    
+
+                    {/* Mobile card layout — visible only on small screens */}
+                    <div className="md:hidden">
+                      <div className="px-3 py-2 space-y-2">
+                        {getSortedItems(bom.items).map((item, i) => {
+                          // Same price computation as desktop table rows
+                          const allPricesMobile = [
+                            item.mcmaster ? { price: item.mcmaster, vendor: 'McMaster-Carr', source: item.vendorSources?.mcmaster } : null,
+                            item.grainger ? { price: item.grainger, vendor: 'Grainger', source: item.vendorSources?.grainger } : null,
+                            item.digikey ? { price: item.digikey, vendor: 'DigiKey', source: item.vendorSources?.digikey } : null,
+                            item.mouser ? { price: item.mouser, vendor: 'Mouser', source: item.vendorSources?.mouser } : null,
+                            item.claudeIntel?.bestPrice ? { price: item.claudeIntel.bestPrice, vendor: item.claudeIntel.bestSource || 'AI Found', source: 'ai' as PriceSource } : null,
+                          ].filter((p): p is { price: number; vendor: string; source: PriceSource } => p !== null);
+                          allPricesMobile.sort((a, b) => a.price - b.price);
+                          const bestMobile = allPricesMobile[0] || null;
+
+                          const vendorLinksMobile = item.details ? Object.entries(item.details).filter(([, d]) => d.url) : [];
+                          const aiAltsMobile = item.claudeIntel?.alternatives?.length || 0;
+                          const altCountMobile = Math.max(0, allPricesMobile.length - 1) + aiAltsMobile;
+
+                          const bestKeyMobile = bestMobile ? bestMobile.vendor.toLowerCase().replace('-carr', '').replace(' ', '') : null;
+                          const bestDetailMobile = bestKeyMobile ? Object.entries(item.details || {}).find(([k]) => k.toLowerCase().includes(bestKeyMobile || '')) : null;
+                          const inStockMobile = bestDetailMobile ? bestDetailMobile[1].inStock : null;
+                          const stockQtyMobile = bestDetailMobile ? bestDetailMobile[1].stockQty : null;
+                          const leadTimeMobile = bestDetailMobile ? bestDetailMobile[1].leadTimeDays : null;
+
+                          const riskFlagsMobile = (item as { riskFlags?: Array<{ type: string; message: string }> }).riskFlags || [];
+                          const hasRiskMobile = riskFlagsMobile.length > 0;
+
+                          const partKeyMobile = `${bom.id}-${item.partNumber}`;
+                          const isPartExpandedMobile = expandedPart === partKeyMobile;
+
+                          return (
+                            <div key={i} className={`bg-white/[0.02] border rounded-lg overflow-hidden transition-all duration-200 ${hasRiskMobile ? 'border-amber-500/20' : 'border-white/[0.06]'}`}>
+                              {/* Tappable card header */}
+                              <button
+                                className="w-full text-left p-4 cursor-pointer active:bg-white/[0.03] transition-colors"
+                                onClick={() => setExpandedPart(isPartExpandedMobile ? null : partKeyMobile)}
+                              >
+                                {/* Row 1: Part number */}
+                                <p className="font-mono text-[11px] text-white/30">{item.partNumber}</p>
+                                {/* Row 2: Description (truncated) */}
+                                <p className="text-xs text-white/60 truncate mt-0.5">{item.description}</p>
+
+                                {/* Risk flags */}
+                                {hasRiskMobile && (
+                                  <div className="flex items-center gap-1 mt-1.5">
+                                    {riskFlagsMobile.map((flag, fi) => (
+                                      <span key={fi} className="text-[8px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/60 border border-amber-500/15">
+                                        {flag.type === 'single_source' ? 'single source' : flag.type === 'out_of_stock' ? 'out of stock' : flag.type === 'long_lead_time' ? 'long lead' : 'unverified'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Row 3: Best price + stock dot + lead time */}
+                                <div className="flex items-center gap-3 mt-3">
+                                  {bestMobile ? (
+                                    <span className="text-sm font-mono text-emerald-400 font-medium">${bestMobile.price.toFixed(2)}</span>
+                                  ) : (
+                                    <span className="text-xs text-white/15">--</span>
+                                  )}
+                                  {inStockMobile === true ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                      <span className="text-[10px] text-emerald-400/70">In Stock</span>
+                                      {stockQtyMobile !== null && <span className="text-[9px] font-mono text-white/25">({stockQtyMobile.toLocaleString()})</span>}
+                                    </span>
+                                  ) : inStockMobile === false ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-400/60" />
+                                      <span className="text-[10px] text-red-400/50">Out of stock</span>
+                                    </span>
+                                  ) : null}
+                                  {leadTimeMobile != null && (
+                                    <span className={`text-[10px] font-mono ${leadTimeMobile > 3 ? 'text-amber-400/70' : 'text-white/30'}`}>
+                                      {leadTimeMobile} day{leadTimeMobile !== 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Row 4: Vendor badge + source + quantity */}
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  {bestMobile ? (
+                                    <>
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                        {bestMobile.vendor}
+                                      </span>
+                                      <span className={`text-[8px] font-mono uppercase ${bestMobile.source === 'api' ? 'text-emerald-400/50' : bestMobile.source === 'estimated' ? 'text-amber-400/50' : bestMobile.source === 'ai' ? 'text-purple-400/50' : 'text-white/20'}`}>
+                                        {bestMobile.source === 'api' ? 'LIVE' : bestMobile.source === 'estimated' ? 'EST' : bestMobile.source === 'ai' ? 'AI' : ''}
+                                      </span>
+                                    </>
+                                  ) : null}
+                                  <span className="text-[10px] font-mono text-white/30">{item.qty} qty</span>
+                                </div>
+
+                                {/* Row 5: Savings + alt count + accept/skip buttons */}
+                                <div className="flex items-center justify-between mt-3">
+                                  <div className="flex items-center gap-3">
+                                    {item.savings > 0 ? (
+                                      <span className="text-xs font-mono font-medium text-emerald-400">Saved: ${item.savings.toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-xs font-mono text-white/20">Saved: --</span>
+                                    )}
+                                    {altCountMobile > 0 ? (
+                                      <span className="text-[10px] font-mono text-purple-400/70">{altCountMobile} alt{altCountMobile !== 1 ? 's' : ''}</span>
+                                    ) : (
+                                      <span className="text-[10px] font-mono text-white/15">0 alts</span>
+                                    )}
+                                  </div>
+                                  <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleDecision(partKeyMobile, 'accepted'); }}
+                                      className={`p-1.5 rounded transition-colors duration-150 ${decisions[partKeyMobile] === 'accepted' ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/15 hover:text-white/30'}`}
+                                      title="Accept"
+                                    >
+                                      <CheckCircle2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleDecision(partKeyMobile, 'skipped'); }}
+                                      className={`p-1.5 rounded transition-colors duration-150 ${decisions[partKeyMobile] === 'skipped' ? 'text-amber-400/60 bg-amber-500/10' : 'text-white/15 hover:text-white/30'}`}
+                                      title="Skip"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </button>
+
+                              {/* Expanded detail — same vendor breakdown + AI intel as desktop */}
+                              {isPartExpandedMobile && (
+                                <div className="border-t border-white/[0.04] px-4 py-3 bg-white/[0.01] animate-in">
+                                  <div className="space-y-4">
+                                    {/* All vendor prices */}
+                                    <div className="space-y-1.5">
+                                      <p className="text-[10px] font-mono text-white/30 uppercase tracking-wider mb-2">All Vendor Prices</p>
+                                      {allPricesMobile.map((p, pi) => (
+                                        <div key={pi} className="flex items-center justify-between gap-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${pi === 0 ? 'bg-emerald-400' : 'bg-white/20'}`} />
+                                            <span className="text-[11px] font-mono text-white/60">{p.vendor}</span>
+                                            <span className={`text-[7px] px-1 py-0.5 rounded uppercase ${p.source === 'api' ? 'bg-emerald-500/10 text-emerald-400/60' : p.source === 'estimated' ? 'bg-amber-500/10 text-amber-400/60' : 'bg-purple-500/10 text-purple-400/60'}`}>
+                                              {p.source === 'api' ? 'live' : p.source === 'estimated' ? 'est' : 'ai'}
+                                            </span>
+                                          </div>
+                                          <span className={`text-[11px] font-mono ${pi === 0 ? 'text-emerald-400 font-medium' : 'text-white/40'}`}>${p.price.toFixed(2)}</span>
+                                        </div>
+                                      ))}
+                                      {vendorLinksMobile.length > 0 && (
+                                        <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
+                                          {vendorLinksMobile.map(([vendor, detail]) => (
+                                            <a key={vendor} href={detail.url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[9px] font-mono text-blue-400/60 hover:text-blue-400 transition-colors">
+                                              <ExternalLink className="w-2.5 h-2.5" />
+                                              {vendor.charAt(0).toUpperCase() + vendor.slice(1)}
+                                            </a>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {/* AI Intelligence */}
+                                    {item.claudeIntel && (
+                                      <div className="space-y-1.5">
+                                        <p className="text-[10px] font-mono text-purple-400/60 uppercase tracking-wider mb-2">Market Intelligence</p>
+                                        {item.claudeIntel.alternatives.map((alt, ai) => (
+                                          <div key={ai} className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-purple-400/40 flex-shrink-0" />
+                                              {alt.url ? (
+                                                <a href={alt.url} target="_blank" rel="noopener" className="text-[11px] font-mono text-purple-300/70 hover:text-purple-300 transition-colors truncate">
+                                                  {alt.distributor} <ExternalLink className="w-2.5 h-2.5 inline ml-0.5 opacity-40" />
+                                                </a>
+                                              ) : (
+                                                <span className="text-[11px] font-mono text-purple-300/50">{alt.distributor}</span>
+                                              )}
+                                            </div>
+                                            <span className="text-[11px] font-mono text-white/40">${alt.price.toFixed(2)}</span>
+                                          </div>
+                                        ))}
+                                        {item.claudeIntel.insight && (
+                                          <p className="text-[10px] text-purple-300/40 italic leading-relaxed pt-2 border-t border-purple-500/10">
+                                            {item.claudeIntel.insight}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Mobile totals bar */}
+                      <div className="mx-3 mb-3 mt-1 flex items-center justify-between px-4 py-3 rounded-lg bg-white/[0.02] border border-white/[0.06]">
+                        <span className="text-xs text-white/40 font-mono">TOTAL SAVINGS</span>
+                        <span className="text-sm font-mono font-bold text-emerald-400">${bom.totalSavings.toFixed(2)}</span>
+                      </div>
+                    </div>
+
                     {/* AI Summary */}
                     <div className="px-5 py-4 bg-white/[0.02] border-t border-white/[0.04]">
                       <div className="flex items-start gap-3">
