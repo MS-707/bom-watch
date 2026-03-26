@@ -1024,43 +1024,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* How It Works */}
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-5 sm:p-6 mb-6">
-          <div className="flex items-center gap-2 mb-5">
-            <h2 className="text-sm font-medium text-white/80">How BOM Watch Works</h2>
-            <span className="text-[9px] font-mono text-white/15 bg-white/[0.03] px-2 py-0.5 rounded-full">4 STEPS</span>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {[
-              { icon: Bell, title: 'Detect', desc: 'Arena webhook fires when a new BOM is approved or ECO released', color: '#f59e0b', step: '01' },
-              { icon: BarChart3, title: 'Analyze', desc: 'Claude AI identifies new OTS parts and classifies by category', color: '#3b82f6', step: '02' },
-              { icon: Search, title: 'Compare', desc: 'Live pricing via DigiKey & Mouser APIs, Grainger cross-reference, McMaster baseline', color: '#a855f7', step: '03' },
-              { icon: DollarSign, title: 'Save', desc: 'Slack alert + dashboard with vendor recommendations and savings', color: '#10b981', step: '04' },
-            ].map((step, i) => (
-              <div key={i} className="relative group p-3 -m-3 rounded-xl hover:bg-white/[0.03] transition-all duration-300">
-                <span className="text-[10px] font-mono text-white/10 mb-2 block">{step.step}</span>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300" style={{ background: `${step.color}15`, border: `1px solid ${step.color}30` }}>
-                  <step.icon className="w-5 h-5" style={{ color: step.color }} />
-                </div>
-                <h3 className="font-medium text-white text-sm mb-1">{step.title}</h3>
-                <p className="text-xs text-white/40 leading-relaxed">{step.desc}</p>
-                {i < 3 && <ArrowRight className="w-4 h-4 text-white/10 absolute -right-5 top-12 hidden md:block" />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer bar */}
-        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          <div className="flex items-start sm:items-center gap-3 flex-1">
-            <Zap className="w-4 h-4 text-emerald-400/30 flex-shrink-0 mt-0.5 sm:mt-0" />
-            <p className="text-xs text-white/40 flex-1">
-              <span className="text-white/60 font-medium">Vendor APIs integrated.</span> DigiKey + Mouser live pricing, Grainger cross-reference, Arena PLM webhook, Slack alerts. Built on Next.js + Vercel + Claude AI.
-            </p>
-          </div>
-          <span className="text-[10px] font-mono text-emerald-400/30 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10 self-end sm:self-auto">v0.5.0</span>
-        </div>
         </>}
+        <p className="text-center text-[9px] font-mono text-white/10 py-4">BOM Watch v0.5.0</p>
       </main>
 
       {/* Success Toast */}
