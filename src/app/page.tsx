@@ -122,6 +122,15 @@ export default function Dashboard() {
   const [liveApiCount, setLiveApiCount] = useState(0);
   const [liveApiNames, setLiveApiNames] = useState<string[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [decisions, setDecisions] = useState<Record<string, 'accepted' | 'skipped' | null>>({});
+
+  // --- Decision toggle for per-part accept/skip ---
+  const toggleDecision = useCallback((key: string, value: 'accepted' | 'skipped') => {
+    setDecisions(prev => ({
+      ...prev,
+      [key]: prev[key] === value ? null : value,
+    }));
+  }, []);
 
   // --- Change 5: Compute stats from actual BOMs ---
   const computedStats = useMemo(() => {
@@ -140,9 +149,14 @@ export default function Dashboard() {
 
   // --- Change 2: Vendor-grouped export ---
   const exportByVendor = useCallback((bom: Bom) => {
+    // Only include accepted parts (filter out skipped); if no decisions made, include all
+    const hasAnyDecision = bom.items.some(item => decisions[`${bom.id}-${item.partNumber}`] != null);
+    const eligibleItems = hasAnyDecision
+      ? bom.items.filter(item => decisions[`${bom.id}-${item.partNumber}`] === 'accepted')
+      : bom.items;
     // Group items by bestVendor
     const groups: Record<string, BomItem[]> = {};
-    for (const item of bom.items) {
+    for (const item of eligibleItems) {
       const vendor = item.bestVendor;
       if (!groups[vendor]) groups[vendor] = [];
       groups[vendor].push(item);
@@ -181,12 +195,17 @@ export default function Dashboard() {
     navigator.clipboard.writeText(output);
     setToastMessage('Vendor-grouped order copied!');
     setTimeout(() => setToastMessage(null), 2500);
-  }, []);
+  }, [decisions]);
 
   // --- Vendor-grouped CSV file download ---
   const downloadVendorCSV = useCallback((bom: Bom) => {
+    // Only include accepted parts (filter out skipped); if no decisions made, include all
+    const hasAnyDecision = bom.items.some(item => decisions[`${bom.id}-${item.partNumber}`] != null);
+    const eligibleItems = hasAnyDecision
+      ? bom.items.filter(item => decisions[`${bom.id}-${item.partNumber}`] === 'accepted')
+      : bom.items;
     const groups: Record<string, BomItem[]> = {};
-    for (const item of bom.items) {
+    for (const item of eligibleItems) {
       const vendor = item.bestVendor;
       if (!groups[vendor]) groups[vendor] = [];
       groups[vendor].push(item);
@@ -240,12 +259,17 @@ export default function Dashboard() {
 
     setToastMessage('Vendor CSV downloaded!');
     setTimeout(() => setToastMessage(null), 2500);
-  }, []);
+  }, [decisions]);
 
   // --- Change 1 (part): Copy recommendations ---
   const copyRecommendations = useCallback((bom: Bom) => {
-    const switchItems = bom.items.filter(i => i.bestVendor !== 'McMaster-Carr' && i.savings > 0);
-    const stayItems = bom.items.filter(i => i.bestVendor === 'McMaster-Carr' || i.savings === 0);
+    // Only include accepted parts (filter out skipped); if no decisions made, include all
+    const hasAnyDecision = bom.items.some(item => decisions[`${bom.id}-${item.partNumber}`] != null);
+    const eligibleItems = hasAnyDecision
+      ? bom.items.filter(item => decisions[`${bom.id}-${item.partNumber}`] === 'accepted')
+      : bom.items;
+    const switchItems = eligibleItems.filter(i => i.bestVendor !== 'McMaster-Carr' && i.savings > 0);
+    const stayItems = eligibleItems.filter(i => i.bestVendor === 'McMaster-Carr' || i.savings === 0);
 
     let output = `RECOMMENDATIONS — ${bom.name} (${bom.id})\n${'='.repeat(50)}\n\n`;
 
@@ -270,7 +294,7 @@ export default function Dashboard() {
     navigator.clipboard.writeText(output);
     setToastMessage('Recommendations copied!');
     setTimeout(() => setToastMessage(null), 2500);
-  }, []);
+  }, [decisions]);
 
   // Fetch from API — falls back to mock data if API returns mock flag
   const fetchBoms = useCallback(async () => {
@@ -719,6 +743,12 @@ export default function Dashboard() {
                             }, {})
                           ).sort((a, b) => b[1] - a[1])[0][0]
                         : null;
+                      // Decision progress for this BOM
+                      const decidedCount = bom.items.filter(item => decisions[`${bom.id}-${item.partNumber}`] != null).length;
+                      const acceptedCount = bom.items.filter(item => decisions[`${bom.id}-${item.partNumber}`] === 'accepted').length;
+                      const skippedCount = bom.items.filter(item => decisions[`${bom.id}-${item.partNumber}`] === 'skipped').length;
+                      const totalParts = bom.items.length;
+                      const allDecided = decidedCount === totalParts && totalParts > 0;
                       return (
                         <div className="px-4 sm:px-5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.04] bg-emerald-500/[0.02]">
                           <div className="flex items-center gap-3 text-xs">
@@ -732,6 +762,13 @@ export default function Dashboard() {
                             {bom.totalSavings > 0 && (
                               <span className="text-[10px] font-mono text-emerald-400/70 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                                 Save ${bom.totalSavings.toFixed(2)}
+                              </span>
+                            )}
+                            {decidedCount > 0 && (
+                              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${allDecided ? 'text-emerald-400/80 bg-emerald-500/10 border-emerald-500/20' : 'text-white/40 bg-white/[0.04] border-white/[0.06]'}`}>
+                                {allDecided
+                                  ? `All parts decided \u2014 ${acceptedCount} accepted, ${skippedCount} skipped`
+                                  : `${decidedCount} of ${totalParts} parts decided`}
                               </span>
                             )}
                           </div>
@@ -778,6 +815,7 @@ export default function Dashboard() {
                             <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider cursor-pointer hover:text-white/50 transition-colors select-none" onClick={() => handleSort('saved')}>
                               <span className="inline-flex items-center gap-0.5 justify-end">Saved<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${sortConfig?.key === 'saved' ? 'opacity-100' : 'opacity-30'} ${sortConfig?.key === 'saved' && sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} /></span>
                             </th>
+                            <th className="w-[60px] py-2.5" />
                           </tr>
                         </thead>
                         <tbody>
@@ -890,11 +928,30 @@ export default function Dashboard() {
                                 <td className="px-3 py-3 text-right text-xs font-mono font-medium text-emerald-400">
                                   {item.savings > 0 ? `$${item.savings.toFixed(2)}` : '—'}
                                 </td>
+                                {/* Accept / Skip actions */}
+                                <td className="px-2 py-3 text-center">
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleDecision(partKey, 'accepted'); }}
+                                      className={`p-0.5 rounded transition-colors duration-150 ${decisions[partKey] === 'accepted' ? 'text-emerald-400' : 'text-white/15 hover:text-white/30'}`}
+                                      title="Accept"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleDecision(partKey, 'skipped'); }}
+                                      className={`p-0.5 rounded transition-colors duration-150 ${decisions[partKey] === 'skipped' ? 'text-amber-400/60' : 'text-white/15 hover:text-white/30'}`}
+                                      title="Skip"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
                               {/* Expanded detail row */}
                               {isPartExpanded && (
                                 <tr className="bg-white/[0.01]">
-                                  <td colSpan={7} className="px-5 py-3">
+                                  <td colSpan={8} className="px-5 py-3">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in">
                                       {/* All vendor prices */}
                                       <div className="space-y-1.5">
@@ -958,7 +1015,7 @@ export default function Dashboard() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-white/[0.06]">
-                            <td colSpan={6} className="px-5 py-3 text-right text-xs text-white/40 font-mono">TOTAL SAVINGS</td>
+                            <td colSpan={7} className="px-5 py-3 text-right text-xs text-white/40 font-mono">TOTAL SAVINGS</td>
                             <td className="px-3 py-3 text-right text-sm font-mono font-bold text-emerald-400">${bom.totalSavings.toFixed(2)}</td>
                           </tr>
                         </tfoot>
