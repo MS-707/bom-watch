@@ -117,6 +117,7 @@ export default function Dashboard() {
   const [manualBomCounter, setManualBomCounter] = useState(0);
   const [expandedPart, setExpandedPart] = useState<string | null>(null);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [liveApiCount, setLiveApiCount] = useState(0);
   const [liveApiNames, setLiveApiNames] = useState<string[]>([]);
@@ -380,6 +381,65 @@ export default function Dashboard() {
     }, 60000);
     return () => clearInterval(interval);
   }, [fetchBoms]);
+
+  // Reset sort when a different BOM is expanded
+  useEffect(() => {
+    setSortConfig(null);
+  }, [expandedBom]);
+
+  // Compute best price for a BomItem (used for sorting)
+  const getBestPrice = useCallback((item: BomItem): number | null => {
+    const prices = [item.mcmaster, item.grainger, item.digikey, item.mouser, item.claudeIntel?.bestPrice ?? null].filter((p): p is number => p !== null);
+    return prices.length > 0 ? Math.min(...prices) : null;
+  }, []);
+
+  // Sort items based on sortConfig
+  const getSortedItems = useCallback((items: BomItem[]): BomItem[] => {
+    if (!sortConfig) return items;
+    const { key, direction } = sortConfig;
+    const sorted = [...items].sort((a, b) => {
+      let aVal: number | string | null;
+      let bVal: number | string | null;
+      switch (key) {
+        case 'bestPrice':
+          aVal = getBestPrice(a);
+          bVal = getBestPrice(b);
+          break;
+        case 'qty':
+          aVal = a.qty;
+          bVal = b.qty;
+          break;
+        case 'vendor':
+          aVal = a.bestVendor?.toLowerCase() ?? '';
+          bVal = b.bestVendor?.toLowerCase() ?? '';
+          break;
+        case 'saved':
+          aVal = a.savings;
+          bVal = b.savings;
+          break;
+        default:
+          return 0;
+      }
+      // Nulls always go last
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return direction === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+    });
+    return sorted;
+  }, [sortConfig, getBestPrice]);
+
+  // Toggle sort: null -> asc -> desc -> null
+  const handleSort = useCallback((key: string) => {
+    setSortConfig(prev => {
+      if (!prev || prev.key !== key) return { key, direction: 'asc' };
+      if (prev.direction === 'asc') return { key, direction: 'desc' };
+      return null;
+    });
+  }, []);
 
   const filteredBOMs = useMemo(() => {
     return boms.filter(bom => {
@@ -704,16 +764,24 @@ export default function Dashboard() {
                         <thead>
                           <tr className="border-b border-white/[0.06]">
                             <th className="px-5 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Part</th>
-                            <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Qty</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Best Price</th>
+                            <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider cursor-pointer hover:text-white/50 transition-colors select-none" onClick={() => handleSort('qty')}>
+                              <span className="inline-flex items-center gap-0.5 justify-center">Qty<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${sortConfig?.key === 'qty' ? 'opacity-100' : 'opacity-30'} ${sortConfig?.key === 'qty' && sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} /></span>
+                            </th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider cursor-pointer hover:text-white/50 transition-colors select-none" onClick={() => handleSort('bestPrice')}>
+                              <span className="inline-flex items-center gap-0.5 justify-end">Best Price<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${sortConfig?.key === 'bestPrice' ? 'opacity-100' : 'opacity-30'} ${sortConfig?.key === 'bestPrice' && sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} /></span>
+                            </th>
                             <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Stock</th>
-                            <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider">Vendor</th>
+                            <th className="px-3 py-2.5 text-left text-[10px] font-mono text-white/30 uppercase tracking-wider cursor-pointer hover:text-white/50 transition-colors select-none" onClick={() => handleSort('vendor')}>
+                              <span className="inline-flex items-center gap-0.5">Vendor<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${sortConfig?.key === 'vendor' ? 'opacity-100' : 'opacity-30'} ${sortConfig?.key === 'vendor' && sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} /></span>
+                            </th>
                             <th className="px-3 py-2.5 text-center text-[10px] font-mono text-white/30 uppercase tracking-wider">Alts</th>
-                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider">Saved</th>
+                            <th className="px-3 py-2.5 text-right text-[10px] font-mono text-white/30 uppercase tracking-wider cursor-pointer hover:text-white/50 transition-colors select-none" onClick={() => handleSort('saved')}>
+                              <span className="inline-flex items-center gap-0.5 justify-end">Saved<ChevronDown className={`w-3 h-3 transition-transform duration-200 ${sortConfig?.key === 'saved' ? 'opacity-100' : 'opacity-30'} ${sortConfig?.key === 'saved' && sortConfig.direction === 'asc' ? 'rotate-180' : ''}`} /></span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {bom.items.map((item, i) => {
+                          {getSortedItems(bom.items).map((item, i) => {
                             // Compute best price across ALL sources (vendors + claudeIntel)
                             const allPrices = [
                               item.mcmaster ? { price: item.mcmaster, vendor: 'McMaster-Carr', source: item.vendorSources?.mcmaster } : null,
