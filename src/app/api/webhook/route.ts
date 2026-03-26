@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 
 /**
  * Arena PLM Webhook Handler
@@ -55,8 +56,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const authHeader = req.headers.get('authorization');
-    if (authHeader !== `Bearer ${ARENA_WEBHOOK_SECRET}`) {
+    const authHeader = req.headers.get('authorization') || '';
+    const expected = `Bearer ${ARENA_WEBHOOK_SECRET}`;
+    const authBuf = Buffer.from(authHeader);
+    const expectedBuf = Buffer.from(expected);
+    if (authBuf.length !== expectedBuf.length || !timingSafeEqual(authBuf, expectedBuf)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
       status: 'received',
       bomNumber: payload.data.number,
       lineItems: lineItems.length,
-      message: 'BOM queued for analysis'
+      message: 'Webhook received. Automated analysis not yet implemented.'
     });
 
   } catch (error) {

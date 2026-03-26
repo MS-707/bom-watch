@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { priceParts } from '@/lib/vendors';
 import type { PricingRequest } from '@/lib/vendors';
-import { saveBomAnalysis, savePriceCheck } from '@/lib/db/bom-store';
+import { saveBomAnalysis, savePriceCheckBatch } from '@/lib/db/bom-store';
 import { initSchema } from '@/lib/db/schema';
 
 // Allow up to 60 seconds for vendor API + Claude AI web search queries
@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
           mode: result.mode,
         });
 
-        // Save individual price history entries
+        // Save all price history entries in a single batch insert
+        const priceRows: Array<{partNumber: string, vendor: string, unitPrice: number | null, source: string}> = [];
         for (const item of result.items) {
           const vendors = [
             { name: 'McMaster-Carr', price: item.vendors.mcmaster, source: item.vendorSources?.mcmaster },
@@ -104,10 +105,11 @@ export async function POST(req: NextRequest) {
           ];
           for (const v of vendors) {
             if (v.price !== null) {
-              await savePriceCheck(item.partNumber, v.name, v.price, v.source || 'unknown');
+              priceRows.push({ partNumber: item.partNumber, vendor: v.name, unitPrice: v.price, source: v.source || 'unknown' });
             }
           }
         }
+        await savePriceCheckBatch(priceRows);
       } catch (dbErr) {
         console.error('[Pricing API] Database save failed (non-fatal):', dbErr);
       }

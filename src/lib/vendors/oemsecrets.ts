@@ -127,12 +127,13 @@ export async function searchOemSecrets(partNumber: string, qty: number = 1): Pro
 
   try {
     const url = `https://oemsecretsapi.com/partsearch?searchTerm=${encodeURIComponent(partNumber)}&apiKey=${apiKey}&countryCode=US&currency=USD`;
+    const sanitizedUrl = url.replace(/apiKey=[^&]+/, 'apiKey=REDACTED');
     console.log(`[OEMSecrets] Fetching: ${partNumber}`);
     const res = await fetch(url);
 
     if (!res.ok) {
       const body = await res.text();
-      console.error(`[OEMSecrets] API error (${res.status}) for "${partNumber}": ${body.slice(0, 200)}`);
+      console.error(`[OEMSecrets] API error (${res.status}) for "${partNumber}" (${sanitizedUrl}): ${body.slice(0, 200)}`);
       return empty;
     }
 
@@ -253,13 +254,16 @@ export async function searchOemSecrets(partNumber: string, qty: number = 1): Pro
       found: true,
     };
   } catch (err) {
-    console.error(`[OEMSecrets] Error searching "${partNumber}":`, err);
+    const sanitizedErr = err instanceof Error ? err.message.replace(/apiKey=[^&]+/g, 'apiKey=REDACTED') : err;
+    console.error(`[OEMSecrets] Error searching "${partNumber}":`, sanitizedErr);
     return empty;
   }
 }
 
+const CONCURRENCY_LIMIT = 5;
+
 /**
- * Search multiple parts in parallel.
+ * Search multiple parts with bounded concurrency (max 5 at a time).
  */
 export async function searchOemSecretsBatch(
   partNumbers: string[],
@@ -267,16 +271,19 @@ export async function searchOemSecretsBatch(
 ): Promise<Map<string, OemSecretsResult>> {
   const results = new Map<string, OemSecretsResult>();
 
-  const searches = await Promise.allSettled(
-    partNumbers.map(async (pn) => {
-      const result = await searchOemSecrets(pn, qty);
-      return { pn, result };
-    })
-  );
+  for (let i = 0; i < partNumbers.length; i += CONCURRENCY_LIMIT) {
+    const batch = partNumbers.slice(i, i + CONCURRENCY_LIMIT);
+    const searches = await Promise.allSettled(
+      batch.map(async (pn) => {
+        const result = await searchOemSecrets(pn, qty);
+        return { pn, result };
+      })
+    );
 
-  for (const search of searches) {
-    if (search.status === 'fulfilled') {
-      results.set(search.value.pn, search.value.result);
+    for (const search of searches) {
+      if (search.status === 'fulfilled') {
+        results.set(search.value.pn, search.value.result);
+      }
     }
   }
 

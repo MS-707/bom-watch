@@ -7,7 +7,10 @@
 
 import { getDb } from './index';
 
+let schemaInitialized = false;
+
 export async function initSchema() {
+  if (schemaInitialized) return;
   const sql = getDb();
 
   await sql`
@@ -47,4 +50,6 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_bom_analyses_created
     ON bom_analyses (created_at DESC)
   `;
+
+  schemaInitialized = true;
 }

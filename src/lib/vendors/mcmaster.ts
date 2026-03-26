@@ -166,6 +166,11 @@ async function subscribePart(partNumber: string): Promise<unknown> {
 
   if (subscribedParts.has(cleanPN)) return null;
 
+  // Cap the cache to prevent unbounded memory growth
+  if (subscribedParts.size > 500) {
+    subscribedParts.clear();
+  }
+
   const token = await login();
   const res = await fetchWithCert(`${API_BASE}/v1/products`, {
     method: 'PUT',

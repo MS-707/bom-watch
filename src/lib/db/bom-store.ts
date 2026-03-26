@@ -116,3 +116,22 @@ export async function savePriceCheck(
     VALUES (${partNumber}, ${vendor}, ${unitPrice}, ${source})
   `;
 }
+
+export async function savePriceCheckBatch(rows: Array<{partNumber: string, vendor: string, unitPrice: number | null, source: string}>) {
+  if (rows.length === 0) return;
+  const sql = getDb();
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const jsonRows = batch.map(r => ({
+      part_number: r.partNumber,
+      vendor: r.vendor,
+      unit_price: r.unitPrice,
+      source: r.source,
+    }));
+    await sql`
+      INSERT INTO price_history (part_number, vendor, unit_price, source)
+      SELECT * FROM json_to_recordset(${JSON.stringify(jsonRows)}::json)
+      AS t(part_number text, vendor text, unit_price numeric, source text)
+    `;
+  }
+}
