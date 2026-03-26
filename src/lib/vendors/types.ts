@@ -99,12 +99,24 @@ export interface PricedItem {
   }>;
 }
 
+export interface ApiCallCounts {
+  mcmaster: number;
+  oemSecrets: number;
+  digikey: number;
+  mouser: number;
+  grainger: number;
+  claudeAi: number;
+  braveSearch: number;
+  total: number;
+}
+
 export interface PricingResponse {
   items: PricedItem[];
   totalSavings: number;
   vendorsQueried: string[];
   timestamp: string;
   mode: 'live' | 'simulated';
+  apiCallCounts: ApiCallCounts;
 }
 
 export interface VendorClient {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { priceParts } from '@/lib/vendors';
 import type { PricingRequest } from '@/lib/vendors';
-import { saveBomAnalysis, savePriceCheckBatch } from '@/lib/db/bom-store';
+import { saveBomAnalysis, savePriceCheckBatch, saveApiCallLog } from '@/lib/db/bom-store';
 import { initSchema } from '@/lib/db/schema';
 
 // Allow up to 60 seconds for vendor API + Claude AI web search queries
@@ -110,6 +110,14 @@ export async function POST(req: NextRequest) {
           }
         }
         await savePriceCheckBatch(priceRows);
+
+        // Log API call counts for audit trail
+        await saveApiCallLog(
+          'manual',
+          validItems.length,
+          result.apiCallCounts as unknown as Record<string, number>,
+          result.apiCallCounts.total,
+        );
       } catch (dbErr) {
         console.error('[Pricing API] Database save failed (non-fatal):', dbErr);
       }

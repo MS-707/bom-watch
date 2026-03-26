@@ -18,7 +18,7 @@ import { McMasterClient, isMcMasterConfigured } from './mcmaster';
 import { searchMarketPrices } from './market-intel';
 import { claudeAnalyzeParts } from './claude-intel';
 import { isOemSecretsConfigured, searchOemSecretsBatch } from './oemsecrets';
-import type { VendorClient, VendorPriceResult, PricingRequest, PricingResponse, PricedItem, PriceSource } from './types';
+import type { VendorClient, VendorPriceResult, PricingRequest, PricingResponse, PricedItem, PriceSource, ApiCallCounts } from './types';
 
 // Singleton clients
 const mcmaster = new McMasterClient();
@@ -72,6 +72,12 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
   ];
   const hasLiveVendors = useMcMaster || useOemSecrets || clients.some(c => c.name !== 'Grainger' && c.isConfigured());
 
+  // Track external API calls for audit logging
+  const callCounts: ApiCallCounts = {
+    mcmaster: 0, oemSecrets: 0, digikey: 0, mouser: 0,
+    grainger: 0, claudeAi: 0, braveSearch: 0, total: 0,
+  };
+
   const partNumbers = request.items.map(i => i.partNumber);
 
   // Step 1: Fetch McMaster product data first (gives us descriptions for Claude)
@@ -82,6 +88,7 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
       request.items.map(async (item) => {
         if (detectVendorType(item.partNumber) !== 'electronic') {
           try {
+            callCounts.mcmaster++;
             const result = await mcmaster.searchByPartNumber(item.partNumber, item.qty);
             if (result) {
               mcmasterDescriptions.set(item.partNumber, result.description);
@@ -95,16 +102,18 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
 
   // Step 2: Launch remaining data sources in parallel (with descriptions available for Claude)
   const oemSecretsPromise = useOemSecrets
-    ? searchOemSecretsBatch(partNumbers, request.items[0]?.qty || 1)
+    ? (callCounts.oemSecrets++, searchOemSecretsBatch(partNumbers, request.items[0]?.qty || 1))
     : Promise.resolve(new Map());
 
   // Claude AI gets McMaster descriptions for better cross-referencing
+  callCounts.claudeAi++;
   const claudeIntelPromise: Promise<Map<string, unknown>> = claudeAnalyzeParts(
     partNumbers,
     mcmasterDescriptions.size > 0 ? mcmasterDescriptions : undefined
   ) as Promise<Map<string, unknown>>;
 
   // Market intel via Brave search (skip when OEM Secrets is configured)
+  if (!useOemSecrets) callCounts.braveSearch += partNumbers.length;
   const marketIntelPromise: Promise<Map<string, unknown>> = useOemSecrets
     ? Promise.resolve(new Map())
     : searchMarketPrices(partNumbers) as Promise<Map<string, unknown>>;
@@ -131,7 +140,9 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
       // McMaster-Carr: use cached result from Step 1, or fetch if not cached
       if (useMcMaster && partType !== 'electronic') {
         try {
-          const mcResult = mcmasterCache.get(item.partNumber)
+          const cached = mcmasterCache.get(item.partNumber);
+          if (!cached) callCounts.mcmaster++;
+          const mcResult = cached
             || await mcmaster.searchByPartNumber(item.partNumber, item.qty);
           if (mcResult) {
             mcmasterPrice = mcResult.unitPrice;
@@ -183,6 +194,10 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
           clients.map(async (client) => {
             if (partType === 'mechanical' && (client.name === 'DigiKey' || client.name === 'Mouser')) return null;
             if (partType === 'electronic' && client.name === 'Grainger') return null;
+            // Track individual vendor API calls
+            if (client.name === 'DigiKey') callCounts.digikey++;
+            else if (client.name === 'Mouser') callCounts.mouser++;
+            else if (client.name === 'Grainger') callCounts.grainger++;
             return client.searchByPartNumber(item.partNumber, item.qty);
           })
         );
@@ -360,12 +375,17 @@ export async function priceParts(request: PricingRequest): Promise<PricingRespon
     pricedItems.reduce((sum, item) => sum + item.savings, 0).toFixed(2)
   );
 
+  // Finalize call counts
+  callCounts.total = callCounts.mcmaster + callCounts.oemSecrets + callCounts.digikey
+    + callCounts.mouser + callCounts.grainger + callCounts.claudeAi + callCounts.braveSearch;
+
   return {
     items: pricedItems,
     totalSavings,
     vendorsQueried: configuredVendors,
     timestamp: new Date().toISOString(),
     mode: hasLiveVendors ? 'live' : 'simulated',
+    apiCallCounts: callCounts,
   };
 }
 
